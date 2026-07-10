@@ -98,17 +98,15 @@ describe('moon', () => {
 });
 
 describe('sparkle', () => {
-  it('has four tips on the axes and four valleys between', () => {
+  it('flares four tips on the axes, with curved sides pulled inward', () => {
     const points = iconPaths('sparkle')[0]!.points;
-    expect(points).toHaveLength(8);
-
-    const radii = points.map((p) => Math.hypot(p.x, p.y));
-    for (let i = 0; i < 8; i++) {
-      expect(radii[i]!).toBeCloseTo(i % 2 === 0 ? 0.5 : 0.13, 5);
-    }
-    // Tips land on the axes: the top one points straight up.
+    // The top tip points straight up, at full radius.
     expect(points[0]!.x).toBeCloseTo(0, 5);
     expect(points[0]!.y).toBeCloseTo(-0.5, 5);
+    // Every point sits inside the tip radius; the side midpoints dip well in.
+    const radii = points.map((p) => Math.hypot(p.x, p.y));
+    for (const r of radii) expect(r).toBeLessThanOrEqual(0.5 + 1e-9);
+    expect(Math.min(...radii)).toBeLessThan(0.2);
   });
 });
 

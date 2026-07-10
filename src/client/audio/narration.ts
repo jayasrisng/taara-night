@@ -100,6 +100,9 @@ export class Narrator {
   private queue: string[] = [];
   private onFinish: (() => void) | null = null;
   private active = false;
+  private audio: HTMLAudioElement | null = null;
+  /** Ids whose recording has already failed to load — no point asking twice. */
+  private missing = new Set<string>();
 
   constructor(adapter: SpeechAdapter | null) {
     this.adapter = adapter;
@@ -107,7 +110,49 @@ export class Narrator {
 
   /** False on a browser with no voice. The button is then never offered. */
   available(): boolean {
-    return this.adapter !== null;
+    return this.adapter !== null || typeof Audio !== 'undefined';
+  }
+
+  /**
+   * Read the story — from its recording when one shipped with the app, and in
+   * the browser's own voice when it did not (or when the file fails mid-load,
+   * on a bad connection, on a platform that blocks media). The recording is
+   * `narration/{id}.mp3` in the client bundle.
+   */
+  read(id: string | null, story: string, onFinish: () => void): void {
+    this.stop();
+
+    if (!id || this.missing.has(id) || typeof Audio === 'undefined') {
+      this.speak(story, onFinish);
+      return;
+    }
+
+    const audio = new Audio(`narration/${id}.mp3`);
+    audio.preload = 'auto';
+    this.audio = audio;
+    this.active = true;
+    this.onFinish = onFinish;
+
+    const settle = (): void => {
+      if (this.audio !== audio) return;
+      this.audio = null;
+      const finish = this.onFinish;
+      this.active = false;
+      this.onFinish = null;
+      finish?.();
+    };
+    const fallBack = (): void => {
+      if (this.audio !== audio) return;
+      this.missing.add(id);
+      this.audio = null;
+      this.active = false;
+      this.onFinish = null;
+      this.speak(story, onFinish);
+    };
+
+    audio.onended = settle;
+    audio.onerror = fallBack;
+    void audio.play().catch(fallBack);
   }
 
   get speaking(): boolean {
@@ -138,6 +183,13 @@ export class Narrator {
 
   /** Silence, immediately. Safe to call when nothing is speaking. */
   stop(): void {
+    if (this.audio) {
+      const audio = this.audio;
+      this.audio = null;
+      audio.onended = null;
+      audio.onerror = null;
+      audio.pause();
+    }
     if (!this.active) return;
     this.active = false;
     this.queue = [];

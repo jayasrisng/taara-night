@@ -37,6 +37,8 @@ export interface StoryCardOptions {
   /** A quiet line under the story, e.g. the night it was revealed. */
   note?: string;
   depth?: number;
+  /** Constellation id, for the shipped narration recording. */
+  narrationId?: string;
 }
 
 export class StoryCard {
@@ -214,7 +216,7 @@ export class StoryCard {
     }
 
     ambience.duck(true);
-    narration.speak(this.options.story, () => {
+    narration.read(this.options.narrationId ?? null, this.options.story, () => {
       ambience.duck(false);
       this.refreshReadPill();
     });

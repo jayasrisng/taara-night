@@ -855,6 +855,7 @@ export class MySky extends Scene {
     this.card = new StoryCard(this, {
       name: constellation.name,
       story: constellation.story,
+      narrationId: constellation.id,
       buttonLabel: 'Close',
       onButton: () => this.closeStory(),
       ...(night ? { note: `Revealed on TaaraNight #${night}` } : {}),

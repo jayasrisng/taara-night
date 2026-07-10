@@ -123,28 +123,46 @@ function moon(): IconPath[] {
 
 /** A four-pointed star: sharp tips on the axes, deep valleys on the diagonals. */
 function sparkle(): IconPath[] {
+  // Each side is a curve pulled *inward*, so the four points flare like a real
+  // glint of light instead of a flat paper star.
   const TIP = 0.5;
-  const VALLEY = 0.13;
-  const points: Pt[] = [];
-  for (let i = 0; i < 8; i++) {
-    const r = i % 2 === 0 ? TIP : VALLEY;
-    const angle = (i * TAU) / 8 - Math.PI / 2;
-    points.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r });
+  const PULL = 0.075;
+  const tips: Pt[] = [0, 1, 2, 3].map((i) => {
+    const angle = (i * TAU) / 4 - Math.PI / 2;
+    return { x: Math.cos(angle) * TIP, y: Math.sin(angle) * TIP };
+  });
+  const pieces: Pt[][] = [];
+  for (let i = 0; i < 4; i++) {
+    const a = tips[i]!;
+    const b = tips[(i + 1) % 4]!;
+    const inward = { x: ((a.x + b.x) / 2) * (PULL / TIP) * 2, y: ((a.y + b.y) / 2) * (PULL / TIP) * 2 };
+    pieces.push(cubic(a, inward, inward, b, 7));
   }
-  return [{ points, closed: true }];
+  return [{ points: chain(...pieces).slice(0, -1), closed: true }];
 }
 
 /** A five-pointed star, point up — the star-names toggle. */
 function star(): IconPath[] {
+  // Five points whose sides bow gently inward — closer to a drawn star than a
+  // cookie cutter. Valleys sit on the same circle a classic pentagram uses.
   const TIP = 0.5;
-  const VALLEY = 0.21;
-  const points: Pt[] = [];
+  const VALLEY = 0.2;
+  const nodes: Pt[] = [];
   for (let i = 0; i < 10; i++) {
     const r = i % 2 === 0 ? TIP : VALLEY;
     const angle = (i * TAU) / 10 - Math.PI / 2;
-    points.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r });
+    nodes.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r });
   }
-  return [{ points, closed: true }];
+  const pieces: Pt[][] = [];
+  for (let i = 0; i < 10; i++) {
+    const a = nodes[i]!;
+    const b = nodes[(i + 1) % 10]!;
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const pull = 0.92; // a whisper of concavity, not a caltrop
+    const control = { x: mid.x * pull, y: mid.y * pull };
+    pieces.push(cubic(a, control, control, b, 4));
+  }
+  return [{ points: chain(...pieces).slice(0, -1), closed: true }];
 }
 
 /** The speaker body both sound icons are built on. */

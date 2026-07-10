@@ -164,3 +164,28 @@ describe('Narrator', () => {
     expect(adapter.spoken).toEqual([]);
   });
 });
+
+describe('read (recorded narration)', () => {
+  it('falls back to the adapter when no Audio exists (node, blocked media)', () => {
+    const spoken: string[] = [];
+    let finished = 0;
+    const narrator = new Narrator({
+      voices: () => [],
+      speak: (text, _voice, done) => {
+        spoken.push(text);
+        done();
+      },
+      cancel: () => undefined,
+    });
+    narrator.read('orion', 'One. Two.', () => finished++);
+    expect(spoken).toEqual(['One.', 'Two.']);
+    expect(finished).toBe(1);
+  });
+
+  it('still finishes with neither a recording nor an adapter', () => {
+    let finished = 0;
+    const narrator = new Narrator(null);
+    narrator.read(null, 'One.', () => finished++);
+    expect(finished).toBe(1);
+  });
+});

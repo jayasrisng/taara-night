@@ -1227,6 +1227,7 @@ export class Play extends Scene {
     this.storyCard = new StoryCard(this, {
       name: this.puzzle.name,
       story: this.puzzle.story,
+      narrationId: this.puzzle.constellationId,
       buttonLabel: 'Continue  ›',
       onButton: () => this.openResults(),
     });
