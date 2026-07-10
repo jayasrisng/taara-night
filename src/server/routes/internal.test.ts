@@ -29,7 +29,6 @@ vi.mock('@devvit/web/server', () => ({
     hGetAll: (...a: Parameters<typeof live.redis.hGetAll>) => live.redis.hGetAll(...a),
     hSet: (...a: Parameters<typeof live.redis.hSet>) => live.redis.hSet(...a),
     zAdd: (...a: Parameters<typeof live.redis.zAdd>) => live.redis.zAdd(...a),
-    zScore: (...a: Parameters<typeof live.redis.zScore>) => live.redis.zScore(...a),
     zRange: (...a: Parameters<typeof live.redis.zRange>) => live.redis.zRange(...a),
   },
   reddit: {

@@ -11,6 +11,7 @@ import {
   nightStartUtc,
   nightEndUtc,
   millisUntilNextNight,
+  weekdayOfNight,
 } from './nightSeed';
 
 describe('LAUNCH_EPOCH_MS', () => {
@@ -79,6 +80,44 @@ describe('nightStartUtc / nightEndUtc', () => {
       expect(d.getUTCMinutes()).toBe(0);
       expect(d.getUTCSeconds()).toBe(0);
     }
+  });
+});
+
+describe('weekdayOfNight', () => {
+  // 0 = Sun … 6 = Sat. Launch night 1 begins 2026-07-01 01:00 UTC (a Wednesday).
+  const SUN = 0;
+  const MON = 1;
+  const TUE = 2;
+  const WED = 3;
+  const SAT = 6;
+
+  it('always returns a weekday index 0–6', () => {
+    for (const night of [1, 5, 6, 7, 30, 100, 365]) {
+      const d = weekdayOfNight(night);
+      expect(d).toBeGreaterThanOrEqual(0);
+      expect(d).toBeLessThanOrEqual(6);
+    }
+  });
+
+  it('matches the launch-week calendar (night 1 = Wed, night 6 = Mon)', () => {
+    expect(weekdayOfNight(1)).toBe(WED); // 2026-07-01
+    expect(weekdayOfNight(4)).toBe(SAT); // 2026-07-04
+    expect(weekdayOfNight(5)).toBe(SUN); // 2026-07-05
+    expect(weekdayOfNight(6)).toBe(MON); // 2026-07-06
+    expect(weekdayOfNight(7)).toBe(TUE); // 2026-07-07
+    expect(weekdayOfNight(8)).toBe(WED); // 2026-07-08
+  });
+
+  it('repeats every 7 nights (week wraparound)', () => {
+    for (const night of [1, 6, 7, 13, 50, 200]) {
+      expect(weekdayOfNight(night + 7)).toBe(weekdayOfNight(night));
+      expect(weekdayOfNight(night + 700)).toBe(weekdayOfNight(night));
+    }
+  });
+
+  it('advances by one day each night across a week', () => {
+    const week = [6, 7, 8, 9, 10, 11, 12].map(weekdayOfNight);
+    expect(week).toEqual([MON, TUE, WED, 4 /* Thu */, 5 /* Fri */, SAT, SUN]);
   });
 });
 

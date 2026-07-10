@@ -4,8 +4,7 @@
  * Pure and Phaser-free, so the results screen's one factual claim — what you
  * just played — is unit testable. It used to be formatted inline from whatever
  * `/api/init` had on file, which is not the same thing: tonight's record is
- * write-once, so a player who solved Hard and then replayed Easy was told they
- * had played "Hard".
+ * write-once, so a player who replayed a night was told about their first solve.
  */
 
 import type { NightResult } from '../../shared/api';
@@ -21,14 +20,9 @@ export function mmss(ms: number): string {
   return `${Math.floor(total / 60)}:${(total % 60).toString().padStart(2, '0')}`;
 }
 
-function titleCase(word: string): string {
-  return word.charAt(0).toUpperCase() + word.slice(1);
-}
-
-/** "Hard · 2:14 · 1 Whisper · Mood: Dreamy" — the timer only where it belongs. */
+/** "2:14 · 1 Whisper · Mood: Dreamy" — one game per night, timer always on. */
 export function describeNight(result: NightResult): string {
-  const parts = [titleCase(result.difficulty)];
-  if (result.difficulty === 'hard') parts.push(mmss(result.timeMs));
+  const parts = [mmss(result.timeMs)];
   parts.push(result.whispers === 0 ? 'no Whispers' : plural(result.whispers, 'Whisper'));
   parts.push(`Mood: ${moodFor(result)}`);
   return parts.join('  ·  ');
@@ -36,7 +30,7 @@ export function describeNight(result: NightResult): string {
 
 /** True when two results describe the same solve. */
 export function sameSolve(a: NightResult, b: NightResult): boolean {
-  return a.difficulty === b.difficulty && a.timeMs === b.timeMs && a.whispers === b.whispers;
+  return a.timeMs === b.timeMs && a.whispers === b.whispers;
 }
 
 export type NightSummary = {

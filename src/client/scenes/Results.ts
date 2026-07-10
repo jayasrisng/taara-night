@@ -26,7 +26,6 @@ import type {
   MySkyResponse,
   NightResult,
 } from '../../shared/api';
-import type { Difficulty } from '../../shared/constellations';
 import { EMPTY_JWALA, type JwalaState } from '../../shared/jwala';
 import { communityMilestone } from '../../shared/community';
 import { millisUntilNextNight } from '../../shared/nightSeed';
@@ -67,7 +66,6 @@ const DENSE_H = 560;
 
 export type ResultsData = {
   night: number;
-  difficulty: Difficulty;
   /** Tonight's constellation, so My Sky can mark the one just revealed. */
   constellationId: string;
   /**
@@ -195,13 +193,11 @@ export class Results extends Scene {
    * The solve this screen was opened by — always what Play measured.
    *
    * Never the server's stored result. That is write-once (the first solve of a
-   * night is the one that counts), so on a replay it describes an earlier solve
-   * at a difficulty the player may not have just played.
+   * night is the one that counts), so on a replay it describes an earlier solve.
    */
   private played(): NightResult {
     return {
       night: this.params.night,
-      difficulty: this.params.difficulty,
       timeMs: this.params.timeMs,
       whispers: this.params.whispers,
       glitches: this.params.glitches,
@@ -673,8 +669,7 @@ export class Results extends Scene {
         color: fill,
       }).setOrigin(0, 0);
 
-      const mode = row.difficulty.charAt(0).toUpperCase() + row.difficulty.slice(1);
-      const detail = `${mode} · ${row.glitches}g · ${mmss(row.timeMs)} · ${row.whispers}w`;
+      const detail = `${mmss(row.timeMs)} · ${row.glitches}g · ${row.whispers}w`;
       const value = crispText(this, w - space.md, cursor, detail, {
         fontFamily: font.sans,
         fontSize: `${typeScale.micro}px`,

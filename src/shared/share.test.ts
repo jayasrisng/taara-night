@@ -6,7 +6,6 @@ import { buildShareText } from './share';
 
 const result = (over: Partial<NightResult> = {}): NightResult => ({
   night: 12,
-  difficulty: 'hard',
   timeMs: 134_000,
   whispers: 2,
   glitches: 1,
@@ -36,6 +35,13 @@ describe('buildShareText', () => {
 
   it('praises a night that needed no help', () => {
     expect(buildShareText(result({ whispers: 0, glitches: 0 }), jwala(1))).toContain('No Whispers needed');
+  });
+
+  it('badges a flawless night — no Whispers and no Glitches', () => {
+    expect(buildShareText(result({ whispers: 0, glitches: 0 }), jwala(1))).toContain('Flawless ✦');
+    // A single Whisper or Glitch is enough to lose the badge.
+    expect(buildShareText(result({ whispers: 1, glitches: 0 }), jwala(1))).not.toContain('Flawless');
+    expect(buildShareText(result({ whispers: 0, glitches: 1 }), jwala(1))).not.toContain('Flawless');
   });
 
   it('speaks of one Whisper and one night in the singular', () => {

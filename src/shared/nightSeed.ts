@@ -51,3 +51,18 @@ export function millisUntilNextNight(now: number | Date = Date.now()): number {
   const current = nightNumberAt(ms);
   return nightStartUtc(current + 1) - ms;
 }
+
+/**
+ * The weekday a night belongs to, 0 = Sunday … 6 = Saturday (the `Date.getUTCDay`
+ * convention).
+ *
+ * A night is labelled by the UTC calendar day one hour before its 01:00 UTC
+ * start — i.e. midnight UTC of that day, which is roughly the Pacific evening the
+ * sky lights up. The weekday drives the difficulty ramp (gentle Monday → monster
+ * Sunday, resetting weekly). Pure and deterministic, and — like the rest of the
+ * night math — it does not chase daylight-saving.
+ */
+export function weekdayOfNight(night: number): number {
+  const HOUR_MS = 60 * 60 * 1000;
+  return new Date(nightStartUtc(night) - HOUR_MS).getUTCDay();
+}

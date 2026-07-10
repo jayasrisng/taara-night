@@ -7,8 +7,6 @@
  */
 
 import type { CompleteRequest } from '../../shared/api';
-import type { Difficulty } from '../../shared/constellations';
-import { DIFFICULTY_PARAMS } from '../../shared/puzzleEngine';
 
 export type Validated<T> = { ok: true; value: T } | { ok: false; message: string };
 
@@ -16,10 +14,6 @@ export type Validated<T> = { ok: true; value: T } | { ok: false; message: string
 export const MAX_TIME_MS = 24 * 60 * 60 * 1000;
 /** Nobody meaningfully mis-taps a Glitch more than this. */
 export const MAX_GLITCHES = 999;
-
-function isDifficulty(value: unknown): value is Difficulty {
-  return value === 'easy' || value === 'medium' || value === 'hard';
-}
 
 function isCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0;
@@ -32,9 +26,11 @@ function clamp(value: number, max: number): number {
 /**
  * Parse an untrusted request body into a CompleteRequest.
  *
- * Rejects: unknown difficulty, negative/non-integer counts, more Whispers than
- * the difficulty allows, a night override below 1.
+ * Rejects: negative/non-integer counts, a night override below 1.
  * Clamps: absurd solve times and Glitch counts.
+ *
+ * Whispers are unlimited now (a 20-second cooldown is the only limit, enforced
+ * client-side), so there is no cap to validate — the count is recorded as sent.
  */
 export function validateCompleteRequest(body: unknown): Validated<CompleteRequest> {
   if (typeof body !== 'object' || body === null) {
@@ -42,11 +38,6 @@ export function validateCompleteRequest(body: unknown): Validated<CompleteReques
   }
 
   const raw: Record<string, unknown> = { ...body };
-
-  if (!isDifficulty(raw.difficulty)) {
-    return { ok: false, message: 'difficulty must be easy, medium or hard' };
-  }
-  const difficulty = raw.difficulty;
 
   if (!isCount(raw.timeMs)) {
     return { ok: false, message: 'timeMs must be a non-negative integer' };
@@ -58,13 +49,7 @@ export function validateCompleteRequest(body: unknown): Validated<CompleteReques
     return { ok: false, message: 'glitches must be a non-negative integer' };
   }
 
-  const maxWhispers = DIFFICULTY_PARAMS[difficulty].maxWhispers;
-  if (raw.whispers > maxWhispers) {
-    return { ok: false, message: `whispers must be at most ${maxWhispers} on ${difficulty}` };
-  }
-
   const value: CompleteRequest = {
-    difficulty,
     timeMs: clamp(raw.timeMs, MAX_TIME_MS),
     whispers: raw.whispers,
     glitches: clamp(raw.glitches, MAX_GLITCHES),

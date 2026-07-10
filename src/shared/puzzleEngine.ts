@@ -1,15 +1,20 @@
 /**
  * Nightly puzzle engine for TaaraNight — pure, deterministic logic (no UI).
  *
- * Given a night number (see nightSeed.ts) and a play difficulty, this module
- * produces the exact puzzle every player of that night sees: which
+ * There is one game per night, shared by everyone. Given a night number (see
+ * nightSeed.ts) this module produces the exact puzzle every player sees: which
  * constellation, where the real stars sit, where the Glitch decoys sit, the
- * solution (which stars connect), and the difficulty parameters (hints, timer,
- * Whisper allowance). Same inputs → identical output, always.
+ * solution (which stars connect), and the night's parameters. Same night →
+ * identical output, always.
+ *
+ * Difficulty comes from the calendar, not a picker: the night's weekday sets a
+ * star-count band (which constellations are eligible) and a Glitch count, gentle
+ * Monday → monster Sunday, resetting weekly. See WEEKDAY_RAMP.
  */
 
-import type { Constellation, Difficulty } from './constellations';
+import type { Constellation } from './constellations';
 import { CONSTELLATION_DATA } from './constellationData';
+import { weekdayOfNight } from './nightSeed';
 import { hashSeed, mulberry32, shuffleInPlace } from './rng';
 
 /**
@@ -22,43 +27,76 @@ export const NO_REPEAT_WINDOW = 15;
 /** Salt so the selection RNG is decorrelated from the star-field RNG. */
 const SELECTION_SALT = 0x5741; // 'WA'
 
-/** Stable numeric code per difficulty, used to seed the star field. */
-const DIFFICULTY_CODE: Record<Difficulty, number> = {
-  easy: 1,
-  medium: 2,
-  hard: 3,
-};
+/** Salt for the (night-only) star-field RNG, decorrelated from selection. */
+const FIELD_SALT = 0x5354; // 'ST'
 
-/** Tunable knobs that define how a difficulty plays. */
-export interface DifficultyParams {
-  /** Show the finished constellation outline as a guide (Easy only). */
+/**
+ * Whispers are unlimited now — a 20-second cooldown (applied client-side) is the
+ * only limit, so the engine no longer caps them. This large finite allowance
+ * keeps the old whisper-count bookkeeping working until that cooldown lands.
+ */
+const WHISPER_ALLOWANCE = 99;
+
+/** The night's parameters. One game per night: no picker, timer always on. */
+export interface NightParams {
+  /** No outline mode, ever — always false. Kept for the client's field shape. */
   showOutline: boolean;
-  /** Tell the player how many real stars to connect. */
+  /** The guess is the game now — always false. */
   showStarCountHint: boolean;
-  /** Number of Glitch decoy stars mixed into the field. */
+  /** Number of Glitch decoy stars mixed into the field (weekday ramp). */
   decoyCount: number;
-  /** Whether a soft timer runs (Hard only). */
+  /** The soft timer is always on now — always true. */
   timed: boolean;
-  /** Maximum Whisper hints the player may spend. */
+  /** Whisper allowance; effectively unlimited (see WHISPER_ALLOWANCE). */
   maxWhispers: number;
 }
 
 /**
- * Difficulty definitions. Each mode has to announce itself in the first five
- * seconds, so exactly one thing is added at every step and nothing is shared:
+ * The weekday ramp: gentle Monday → monster Sunday, resetting weekly. Each
+ * weekday targets a real-star-count band (which constellations are eligible that
+ * night) and a Glitch count. Indexed by ramp position 0 = Monday … 6 = Sunday.
  *
- *  - Easy:   the whole outline, no Glitches, no timer, no Whispers — the
- *            outline *is* the help, so a hint button would be noise.
- *  - Medium: the outline goes away; a star count and a handful of Glitches
- *            arrive, and with them the three Whispers.
- *  - Hard:   the count goes away, the Glitches more than double, and the timer
- *            starts. Still three Whispers, never more.
+ * The band Mon→Sun is stars ≤6 / 7 / 8 / 9 / 10 / 11 / ≥12; Glitches
+ * 2 / 3 / 4 / 6 / 8 / 10 / 12.
  */
-export const DIFFICULTY_PARAMS: Record<Difficulty, DifficultyParams> = {
-  easy: { showOutline: true, showStarCountHint: true, decoyCount: 0, timed: false, maxWhispers: 0 },
-  medium: { showOutline: false, showStarCountHint: true, decoyCount: 5, timed: false, maxWhispers: 3 },
-  hard: { showOutline: false, showStarCountHint: false, decoyCount: 12, timed: true, maxWhispers: 3 },
-};
+interface WeekdayBand {
+  /** Inclusive min/max real-star count for the night's constellation. */
+  minStars: number;
+  maxStars: number;
+  /** Glitch decoys mixed into the field. */
+  decoyCount: number;
+}
+
+const WEEKDAY_RAMP: readonly WeekdayBand[] = [
+  { minStars: 0, maxStars: 6, decoyCount: 2 }, // Mon — gentle
+  { minStars: 7, maxStars: 7, decoyCount: 3 }, // Tue
+  { minStars: 8, maxStars: 8, decoyCount: 4 }, // Wed
+  { minStars: 9, maxStars: 9, decoyCount: 6 }, // Thu
+  { minStars: 10, maxStars: 10, decoyCount: 8 }, // Fri
+  { minStars: 11, maxStars: 11, decoyCount: 10 }, // Sat
+  { minStars: 12, maxStars: Infinity, decoyCount: 12 }, // Sun — monster
+];
+
+/** Map a JS weekday (0 = Sun … 6 = Sat) to ramp position (0 = Mon … 6 = Sun). */
+function rampPosition(weekday: number): number {
+  return (weekday + 6) % 7;
+}
+
+/** The weekday band that governs a night. */
+function bandForNight(night: number): WeekdayBand {
+  return WEEKDAY_RAMP[rampPosition(weekdayOfNight(night))]!;
+}
+
+/** The deterministic parameters for a night. */
+export function nightParams(night: number): NightParams {
+  return {
+    showOutline: false,
+    showStarCountHint: false,
+    decoyCount: bandForNight(night).decoyCount,
+    timed: true,
+    maxWhispers: WHISPER_ALLOWANCE,
+  };
+}
 
 /** A single star in the generated field. */
 export interface PuzzleStar {
@@ -89,7 +127,6 @@ export interface NightlyPuzzle {
   night: number;
   /** Player-facing label, e.g. "TaaraNight #12". */
   label: string;
-  difficulty: Difficulty;
   /** Source constellation id (spoiler — server/UI decides when to reveal). */
   constellationId: string;
   /** Source constellation name (spoiler — reveal only after completion). */
@@ -98,7 +135,7 @@ export interface NightlyPuzzle {
   meaning: string;
   /** Bedtime story reward (spoiler — reveal only after completion). */
   story: string;
-  params: DifficultyParams;
+  params: NightParams;
   /** Real stars + decoys, in a shuffled order. */
   stars: PuzzleStar[];
   /** The correct connections, as PuzzleStar id pairs. */
@@ -109,9 +146,37 @@ export interface NightlyPuzzle {
 
 const CONSTELLATIONS = CONSTELLATION_DATA.constellations;
 
+/** Real-star count per constellation, by array index (for band filtering). */
+const STAR_COUNTS = CONSTELLATIONS.map((c) => c.stars.length);
+const MAX_STAR_COUNT = STAR_COUNTS.reduce((a, b) => Math.max(a, b), 0);
+
+/**
+ * The eligible constellation indices for a night: those not recently used AND
+ * whose star count falls in the weekday band. If the band admits no one, widen
+ * it symmetrically by ±1 star until it does; the no-repeat exclusion is never
+ * relaxed (the "recently used" pool is far smaller than the dataset, so it is
+ * always non-empty). Never returns an empty array.
+ */
+function eligiblePool(forbidden: Set<number>, band: WeekdayBand): number[] {
+  const available: number[] = [];
+  for (let i = 0; i < CONSTELLATIONS.length; i++) {
+    if (!forbidden.has(i)) available.push(i);
+  }
+  for (let slack = 0; ; slack++) {
+    const min = band.minStars - slack;
+    const max = band.maxStars + slack;
+    const inBand = available.filter((i) => STAR_COUNTS[i]! >= min && STAR_COUNTS[i]! <= max);
+    if (inBand.length > 0) return inBand;
+    // The widened band already spans every star count: fall back to the band-less
+    // pool (still excluding recent). Reached only if `available` itself is empty.
+    if (min <= 0 && max >= MAX_STAR_COUNT) return available;
+  }
+}
+
 /**
  * Deterministically choose the constellation index for a night such that no
- * constellation repeats within NO_REPEAT_WINDOW consecutive nights.
+ * constellation repeats within NO_REPEAT_WINDOW consecutive nights and the
+ * constellation's star count sits in the night's weekday band.
  *
  * We forward-simulate from night 1, keeping a small "recently used" window and
  * excluding those from each night's pick. Because the simulation is a pure
@@ -129,10 +194,7 @@ export function selectConstellationIndexForNight(night: number): number {
   for (let n = 1; n <= night; n++) {
     const rng = mulberry32(hashSeed(n, SELECTION_SALT));
     const forbidden = new Set(recent);
-    const pool: number[] = [];
-    for (let i = 0; i < count; i++) {
-      if (!forbidden.has(i)) pool.push(i);
-    }
+    const pool = eligiblePool(forbidden, bandForNight(n));
     picked = pool[Math.floor(rng() * pool.length)] ?? 0;
     recent.push(picked);
     if (recent.length > windowSize) recent.shift();
@@ -204,17 +266,16 @@ function generateDecoys(realStars: readonly Point[], count: number, rng: () => n
 }
 
 /**
- * Build the full puzzle for a night at a given difficulty.
+ * Build the full puzzle for a night — one shared game for everyone.
  *
- * The constellation depends only on the night (so every difficulty of the same
- * night shares the same constellation and story). The star layout — decoys and
- * shuffle order — depends on (night, difficulty), so each difficulty gets a
- * distinct-but-reproducible field.
+ * The constellation, its star layout (decoys and shuffle order) and the Glitch
+ * count all derive from the night alone, so every player of a night sees an
+ * identical, reproducible board.
  */
-export function generatePuzzle(night: number, difficulty: Difficulty): NightlyPuzzle {
+export function generatePuzzle(night: number): NightlyPuzzle {
   const constellation = selectConstellationForNight(night);
-  const params = DIFFICULTY_PARAMS[difficulty];
-  const rng = mulberry32(hashSeed(night, DIFFICULTY_CODE[difficulty]));
+  const params = nightParams(night);
+  const rng = mulberry32(hashSeed(night, FIELD_SALT));
 
   const decoys = generateDecoys(constellation.stars, params.decoyCount, rng);
 
@@ -256,7 +317,6 @@ export function generatePuzzle(night: number, difficulty: Difficulty): NightlyPu
   return {
     night,
     label: `TaaraNight #${night}`,
-    difficulty,
     constellationId: constellation.id,
     name: constellation.name,
     meaning: constellation.meaning,

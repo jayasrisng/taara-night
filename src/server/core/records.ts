@@ -20,7 +20,6 @@ import type {
   NightResult,
   SkyEntry,
 } from '../../shared/api';
-import type { Difficulty } from '../../shared/constellations';
 import { CONSTELLATION_DATA } from '../../shared/constellationData';
 import { advanceJwala, EMPTY_JWALA, type JwalaState } from '../../shared/jwala';
 import { selectConstellationForNight } from '../../shared/puzzleEngine';
@@ -29,7 +28,7 @@ import { keys, nightScore, nightScoreParts } from './keys';
 /** Just the Redis surface TaaraNight actually uses. */
 export type RedisLike = Pick<
   RedisClient,
-  'get' | 'set' | 'mGet' | 'incrBy' | 'hGetAll' | 'hSet' | 'zAdd' | 'zRange' | 'zScore'
+  'get' | 'set' | 'mGet' | 'incrBy' | 'hGetAll' | 'hSet' | 'zAdd' | 'zRange'
 >;
 
 /** How many rows a soft leaderboard shows. Gentle, not exhaustive. */
@@ -42,10 +41,6 @@ function toInt(value: string | undefined | null, fallback = 0): number {
   if (value === undefined || value === null) return fallback;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function isDifficulty(value: string | undefined): value is Difficulty {
-  return value === 'easy' || value === 'medium' || value === 'hard';
 }
 
 function rank(
@@ -107,12 +102,8 @@ export function createStore(redis: RedisLike) {
     const hash = await redis.hGetAll(keys.result(night, username));
     if (!hash || Object.keys(hash).length === 0) return null;
 
-    const difficulty = hash.difficulty;
-    if (!isDifficulty(difficulty)) return null;
-
     return {
       night,
-      difficulty,
       timeMs: toInt(hash.timeMs),
       whispers: toInt(hash.whispers),
       glitches: toInt(hash.glitches),
@@ -123,7 +114,6 @@ export function createStore(redis: RedisLike) {
 
   async function saveResult(username: string, result: NightResult): Promise<void> {
     await redis.hSet(keys.result(result.night, username), {
-      difficulty: result.difficulty,
       timeMs: String(result.timeMs),
       whispers: String(result.whispers),
       glitches: String(result.glitches),
@@ -231,15 +221,11 @@ export function createStore(redis: RedisLike) {
   /**
    * Record a completed night for a player.
    *
-   * The *first* completion of a night — whatever the mode — writes the night
-   * record, feeds the Jwala, adds the constellation to My Sky and bumps the
-   * community counters; those are once-per-night things and stay that way.
-   *
-   * Each *mode* records once. A second mode the same night writes its own
-   * result and may improve the player's row on the unified nightly board
-   * (Hard beats Medium beats Easy, then fewer Glitches, less time, fewer
-   * Whispers — the packed `nightScore`). Replaying a mode already recorded
-   * changes nothing and answers `alreadyPlayed`.
+   * There is one game per night now, so the first completion is the only one:
+   * it writes the night record, feeds the Jwala, adds the constellation to My
+   * Sky, bumps the community counters and places the player on the nightly
+   * board. The result hash is the write-once guard — a replay finds it and
+   * counts nothing, answering `alreadyPlayed`.
    *
    * The constellation and its star count come from the night number, never from
    * the client, so a tampered request cannot collect a constellation it did not
@@ -252,11 +238,7 @@ export function createStore(redis: RedisLike) {
     now: number = Date.now()
   ): Promise<RecordOutcome> {
     const existing = await loadResult(night, username);
-
-    // This mode already recorded tonight: a replay counts nothing.
-    const diffKey = keys.resultDiff(night, username, request.difficulty);
-    const priorMode = await redis.hGetAll(diffKey);
-    if (existing && ((priorMode && Object.keys(priorMode).length > 0) || existing.difficulty === request.difficulty)) {
+    if (existing) {
       const [jwala, community] = await Promise.all([loadJwala(username), loadCommunity(night)]);
       return { alreadyPlayed: true, result: existing, jwala, community };
     }
@@ -264,7 +246,6 @@ export function createStore(redis: RedisLike) {
     const constellation = selectConstellationForNight(night);
     const result: NightResult = {
       night,
-      difficulty: request.difficulty,
       timeMs: request.timeMs,
       whispers: request.whispers,
       glitches: request.glitches,
@@ -272,22 +253,10 @@ export function createStore(redis: RedisLike) {
       completedAt: now,
     };
 
-    await redis.hSet(diffKey, { completedAt: String(now) });
-
-    // The unified nightly board keeps each player's best row across modes.
-    const score = nightScore(result);
-    const current = await redis.zScore(keys.lbNight(night), username);
-    if (current === undefined || current === null || score < current) {
-      await redis.zAdd(keys.lbNight(night), { member: username, score });
-    }
-
-    if (existing) {
-      // The once-per-night things are already counted; only the board moved.
-      const [jwala, community] = await Promise.all([loadJwala(username), loadCommunity(night)]);
-      return { alreadyPlayed: false, result, jwala, community };
-    }
-
     await saveResult(username, result);
+
+    // The nightly board: fastest first, Glitches then Whispers as tiebreaks.
+    await redis.zAdd(keys.lbNight(night), { member: username, score: nightScore(result) });
 
     const jwala = advanceJwala(await loadJwala(username), night);
     await saveJwala(username, jwala);

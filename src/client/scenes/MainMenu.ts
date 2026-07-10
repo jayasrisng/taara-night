@@ -202,7 +202,6 @@ export class MainMenu extends Scene {
     }
 
     const response = await postComplete({
-      difficulty: 'easy',
       timeMs: 1000,
       whispers: 0,
       glitches: 0,

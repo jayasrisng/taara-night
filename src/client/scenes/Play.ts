@@ -84,7 +84,6 @@ function mmss(totalSeconds: number): string {
 }
 
 export class Play extends Scene {
-  private difficulty: Difficulty = 'easy';
   private night = 1;
   private puzzle!: NightlyPuzzle;
 
@@ -154,7 +153,6 @@ export class Play extends Scene {
   }
 
   init(data: SceneData): void {
-    this.difficulty = data.difficulty ?? 'easy';
     this.night = data.night ?? Math.max(1, nightNumberAt(Date.now()));
     this.starViews = [];
     this.byId = new Map();
@@ -184,7 +182,7 @@ export class Play extends Scene {
   }
 
   create(): void {
-    this.puzzle = generatePuzzle(this.night, this.difficulty);
+    this.puzzle = generatePuzzle(this.night);
     this.whispersLeft = this.puzzle.params.maxWhispers;
     // Not `this.time.now`: the scene Clock has not ticked when `create` runs, so
     // it still reads 0 and the timer would count from page load, not from now.
@@ -962,7 +960,6 @@ export class Play extends Scene {
     if (this.submission) return;
 
     this.submission = postComplete({
-      difficulty: this.difficulty,
       timeMs: this.solveMs,
       whispers: this.whispersUsed(),
       glitches: this.glitchHits,
@@ -977,7 +974,6 @@ export class Play extends Scene {
   private openResults(): void {
     const data: ResultsData = {
       night: this.puzzle.night,
-      difficulty: this.difficulty,
       constellationId: this.puzzle.constellationId,
       submission: this.submission ?? undefined,
       timeMs: this.solveMs,

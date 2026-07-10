@@ -39,9 +39,12 @@ function glitchLine(glitches: number): string {
   return glitches === 0 ? 'No Glitches touched' : `${plural(glitches, 'Glitch')} touched`;
 }
 
-function modeLine(result: NightResult): string {
-  const mode = result.difficulty.charAt(0).toUpperCase() + result.difficulty.slice(1);
-  return `Mode: ${mode}`;
+/**
+ * The badge line, present only on a flawless night: no Whispers *and* no
+ * Glitches. It is the same honesty the nightly board's "flawless" tag carries.
+ */
+function flawlessLine(result: NightResult): string | null {
+  return result.whispers === 0 && result.glitches === 0 ? 'Flawless ✦' : null;
 }
 
 /**
@@ -54,9 +57,10 @@ export function buildSharePost(
   jwala: JwalaState,
   gameLink: string | null
 ): { title: string; text: string } {
+  const flawless = flawlessLine(result);
   const lines = [
     `TaaraNight #${result.night} 🌙`,
-    modeLine(result),
+    ...(flawless ? [flawless] : []),
     glitchLine(result.glitches),
     whisperLine(result.whispers),
     jwalaLine(jwala),
@@ -70,9 +74,11 @@ export function buildSharePost(
 }
 
 export function buildShareText(result: NightResult, jwala: JwalaState): string {
+  const flawless = flawlessLine(result);
   return [
     `TaaraNight #${result.night} 🌙`,
     'Tonight’s sky revealed',
+    ...(flawless ? [flawless] : []),
     whisperLine(result.whispers),
     jwalaLine(jwala),
     `Mood: ${moodFor(result)}`,

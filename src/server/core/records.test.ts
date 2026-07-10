@@ -7,7 +7,7 @@ import { createStore, type Store } from './records';
 const NIGHT = 12;
 
 function play(overrides: Partial<CompleteRequest> = {}): CompleteRequest {
-  return { difficulty: 'medium', timeMs: 60_000, whispers: 1, glitches: 2, ...overrides };
+  return { timeMs: 60_000, whispers: 1, glitches: 2, ...overrides };
 }
 
 /** Real stars in the constellation a night resolves to. */
@@ -29,7 +29,6 @@ describe('store', () => {
       expect(outcome.alreadyPlayed).toBe(false);
       expect(outcome.result).toEqual({
         night: NIGHT,
-        difficulty: 'medium',
         timeMs: 60_000,
         whispers: 1,
         glitches: 2,
@@ -70,7 +69,7 @@ describe('store', () => {
   });
 
   describe('repeat play on the same night', () => {
-    it('returns the original result and counts nothing twice on the same mode', async () => {
+    it('returns the original result and counts nothing twice', async () => {
       const first = await store.recordCompletion('ana', NIGHT, play({ timeMs: 30_000 }), 1_000);
 
       const second = await store.recordCompletion(
@@ -86,25 +85,9 @@ describe('store', () => {
       expect(second.community).toEqual(first.community);
     });
 
-    it('a different mode records for the board but never re-counts the night', async () => {
-      const first = await store.recordCompletion('ana', NIGHT, play({ timeMs: 30_000 }), 1_000);
-      const other = await store.recordCompletion(
-        'ana',
-        NIGHT,
-        play({ difficulty: 'hard', timeMs: 10_000 }),
-        2_000
-      );
-
-      expect(other.alreadyPlayed).toBe(false);
-      expect(other.jwala).toEqual({ current: 1, longest: 1, lastNight: NIGHT });
-      expect(other.community).toEqual(first.community);
-      // The night record stays the first solve.
-      expect(await store.loadResult(NIGHT, 'ana')).toMatchObject({ timeMs: 30_000 });
-    });
-
-    it('does not improve the board on a replay of the same mode', async () => {
-      await store.recordCompletion('ana', NIGHT, play({ difficulty: 'hard', timeMs: 30_000 }));
-      await store.recordCompletion('ana', NIGHT, play({ difficulty: 'hard', timeMs: 1 }));
+    it('does not improve the board on a replay', async () => {
+      await store.recordCompletion('ana', NIGHT, play({ timeMs: 30_000 }));
+      await store.recordCompletion('ana', NIGHT, play({ timeMs: 1 }));
 
       const boards = await store.loadLeaderboards(NIGHT);
       expect(boards.tonight).toHaveLength(1);
@@ -123,37 +106,15 @@ describe('store', () => {
     });
 
     /**
-     * The record is the first solve of the night, at the difficulty it was
-     * actually played. A later solve at another difficulty must not rewrite it
+     * The record is the first solve of the night. A replay must not rewrite it
      * — the results screen reads this back, and a share card is built from it.
      */
-    it('keeps the first solve as the night record when a second mode is played', async () => {
-      await store.recordCompletion('ana', NIGHT, play({ difficulty: 'hard', timeMs: 16_000 }));
-      const second = await store.recordCompletion('ana', NIGHT, play({ difficulty: 'easy', timeMs: 90_000 }));
+    it('keeps the first solve as the night record', async () => {
+      await store.recordCompletion('ana', NIGHT, play({ timeMs: 16_000 }));
+      const second = await store.recordCompletion('ana', NIGHT, play({ timeMs: 90_000 }));
 
-      // A different mode records (for the board) but never rewrites the night
-      // record the share card is built from.
-      expect(second.alreadyPlayed).toBe(false);
-      expect(await store.loadResult(NIGHT, 'ana')).toMatchObject({ difficulty: 'hard', timeMs: 16_000 });
-    });
-
-    it('keeps the best mode on the board when several are played', async () => {
-      await store.recordCompletion('ana', NIGHT, play({ difficulty: 'easy', timeMs: 90_000, whispers: 0 }));
-      await store.recordCompletion('ana', NIGHT, play({ difficulty: 'hard', timeMs: 50_000 }));
-      await store.recordCompletion('ana', NIGHT, play({ difficulty: 'medium', timeMs: 20_000 }));
-
-      const boards = await store.loadLeaderboards(NIGHT);
-      expect(boards.tonight).toHaveLength(1);
-      expect(boards.tonight[0]).toMatchObject({ username: 'ana', difficulty: 'hard', timeMs: 50_000 });
-    });
-
-    it('a later, harder mode improves the board row', async () => {
-      await store.recordCompletion('ana', NIGHT, play({ difficulty: 'easy', timeMs: 90_000, whispers: 0 }));
-      await store.recordCompletion('ana', NIGHT, play({ difficulty: 'hard', timeMs: 16_000 }));
-
-      const boards = await store.loadLeaderboards(NIGHT);
-      expect(boards.tonight).toHaveLength(1);
-      expect(boards.tonight[0]).toMatchObject({ username: 'ana', difficulty: 'hard', timeMs: 16_000 });
+      expect(second.alreadyPlayed).toBe(true);
+      expect(await store.loadResult(NIGHT, 'ana')).toMatchObject({ timeMs: 16_000 });
     });
   });
 
@@ -240,22 +201,24 @@ describe('store', () => {
   });
 
   describe('soft leaderboards', () => {
-    it('ranks the one nightly board: mode, then Glitches, then time, then Whispers', async () => {
-      await store.recordCompletion('easyplayer', NIGHT, play({ difficulty: 'easy', timeMs: 5_000, whispers: 0 }));
-      await store.recordCompletion('medplayer', NIGHT, play({ difficulty: 'medium', glitches: 0, timeMs: 30_000 }));
-      await store.recordCompletion('hardSlow', NIGHT, play({ difficulty: 'hard', glitches: 0, timeMs: 90_000 }));
-      await store.recordCompletion('hardFast', NIGHT, play({ difficulty: 'hard', glitches: 0, timeMs: 20_000 }));
-      await store.recordCompletion('hardGlitchy', NIGHT, play({ difficulty: 'hard', glitches: 4, timeMs: 10_000 }));
+    it('ranks the one nightly board by time, then Glitches then Whispers', async () => {
+      await store.recordCompletion('slow', NIGHT, play({ glitches: 0, timeMs: 90_000, whispers: 0 }));
+      await store.recordCompletion('mid', NIGHT, play({ glitches: 0, timeMs: 30_000, whispers: 0 }));
+      await store.recordCompletion('fast', NIGHT, play({ glitches: 0, timeMs: 20_000, whispers: 0 }));
+      // Same time as 'fast', but Glitches break the tie (member name breaks the
+      // remaining tie between 'fast' and 'fastClean' — both fully flawless).
+      await store.recordCompletion('fastClean', NIGHT, play({ glitches: 0, timeMs: 20_000, whispers: 0 }));
+      await store.recordCompletion('fastGlitchy', NIGHT, play({ glitches: 4, timeMs: 20_000, whispers: 0 }));
 
       const boards = await store.loadLeaderboards(NIGHT);
       expect(boards.tonight.map((row) => row.username)).toEqual([
-        'hardFast',
-        'hardSlow',
-        'hardGlitchy',
-        'medplayer',
-        'easyplayer',
+        'fast',
+        'fastClean',
+        'fastGlitchy',
+        'mid',
+        'slow',
       ]);
-      expect(boards.tonight[0]).toMatchObject({ rank: 1, difficulty: 'hard', timeMs: 20_000 });
+      expect(boards.tonight[0]).toMatchObject({ rank: 1, timeMs: 20_000, glitches: 0, whispers: 0 });
     });
 
     it('ranks the longest burning Jwala descending', async () => {
@@ -286,14 +249,14 @@ describe('store', () => {
     });
 
     it('keeps each night’s boards separate', async () => {
-      await store.recordCompletion('ana', 5, play({ difficulty: 'hard', timeMs: 1_000 }));
+      await store.recordCompletion('ana', 5, play({ timeMs: 1_000 }));
       const other = await store.loadLeaderboards(6);
       expect(other.tonight).toEqual([]);
     });
 
     it('shows at most ten stargazers per board', async () => {
       for (let i = 0; i < 14; i++) {
-        await store.recordCompletion(`p${i}`, NIGHT, play({ difficulty: 'hard', timeMs: i * 100 }));
+        await store.recordCompletion(`p${i}`, NIGHT, play({ timeMs: i * 100 }));
       }
       const boards = await store.loadLeaderboards(NIGHT);
       expect(boards.tonight).toHaveLength(10);

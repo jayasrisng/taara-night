@@ -33,7 +33,6 @@ vi.mock('@devvit/web/server', () => ({
     hGetAll: (...a: Parameters<typeof live.redis.hGetAll>) => live.redis.hGetAll(...a),
     hSet: (...a: Parameters<typeof live.redis.hSet>) => live.redis.hSet(...a),
     zAdd: (...a: Parameters<typeof live.redis.zAdd>) => live.redis.zAdd(...a),
-    zScore: (...a: Parameters<typeof live.redis.zScore>) => live.redis.zScore(...a),
     zRange: (...a: Parameters<typeof live.redis.zRange>) => live.redis.zRange(...a),
   },
   reddit: {
@@ -68,7 +67,7 @@ const post = (body: unknown) =>
 
 const share = () => api.request('/share', { method: 'POST' });
 
-const solve = { difficulty: 'hard', timeMs: 42_000, whispers: 1, glitches: 2 };
+const solve = { timeMs: 42_000, whispers: 1, glitches: 2 };
 
 describe('routes', () => {
   beforeEach(() => {
@@ -122,9 +121,9 @@ describe('routes', () => {
   });
 
   it('POST /complete rejects bad payloads with 400', async () => {
-    expect((await post({ ...solve, difficulty: 'nightmare' })).status).toBe(400);
-    expect((await post({ ...solve, whispers: 9 })).status).toBe(400);
     expect((await post({ ...solve, timeMs: -5 })).status).toBe(400);
+    expect((await post({ ...solve, whispers: 1.5 })).status).toBe(400);
+    expect((await post({ ...solve, glitches: -1 })).status).toBe(400);
     const res = await api.request('/complete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -162,39 +161,29 @@ describe('routes', () => {
     expect(mysky.total).toBeGreaterThan(15);
   });
 
-  /**
-   * Regression, Step 7.5. Fastest is a Hard-mode board: an Easy solve with the
-   * outline showing is not the same race. Playing Easy — even in sixteen
-   * seconds, even after a Hard solve is on file — must never put a time on it.
-   */
-  it('POST /complete on a second mode improves the unified board row', async () => {
-    await post({ difficulty: 'easy', timeMs: 16_000, whispers: 0, glitches: 0 });
+  it('GET /leaderboards ranks the one nightly board fastest first', async () => {
+    live.username = 'slow';
+    await post({ timeMs: 90_000, whispers: 0, glitches: 0 });
+    live.username = 'fast';
+    await post({ timeMs: 20_000, whispers: 0, glitches: 0 });
 
-    let boards = await (await api.request('/leaderboards')).json();
-    expect(boards.tonight).toHaveLength(1);
-    expect(boards.tonight[0].difficulty).toBe('easy');
-
-    await post({ difficulty: 'hard', timeMs: 16_000, whispers: 0, glitches: 0 });
-    boards = await (await api.request('/leaderboards')).json();
-    expect(boards.tonight).toHaveLength(1);
-    expect(boards.tonight[0].difficulty).toBe('hard');
+    const boards = await (await api.request('/leaderboards')).json();
+    expect(boards.tonight.map((row: { username: string }) => row.username)).toEqual(['fast', 'slow']);
+    expect(boards.tonight[0]).toMatchObject({ rank: 1, timeMs: 20_000, glitches: 0, whispers: 0 });
   });
 
   /**
-   * Regression, Step 7.5. The stored record is write-once, so after Hard then
-   * Easy it still describes the Hard solve. That is correct — but it is the
-   * *record*, not the solve just played, and the results screen must not read
-   * it as one. See client/ui/nightSummary.test.ts for the other half.
+   * The stored record is write-once, so a replay never rewrites it — the results
+   * screen and the share card read this first solve back.
+   * See client/ui/nightSummary.test.ts for the other half.
    */
   it('POST /complete keeps the night record on the first solve, whatever follows', async () => {
-    await post({ difficulty: 'hard', timeMs: 16_000, whispers: 0, glitches: 0 });
-    await post({ difficulty: 'easy', timeMs: 90_000, whispers: 0, glitches: 0 });
-    const replay = await (await post({ difficulty: 'hard', timeMs: 1, whispers: 0, glitches: 0 })).json();
+    await post({ timeMs: 16_000, whispers: 0, glitches: 0 });
+    const replay = await (await post({ timeMs: 1, whispers: 0, glitches: 0 })).json();
 
     expect(replay.alreadyPlayed).toBe(true);
-    expect(replay.result.difficulty).toBe('hard');
     expect(replay.result.timeMs).toBe(16_000);
-    expect((await (await api.request('/init')).json()).tonight.difficulty).toBe('hard');
+    expect((await (await api.request('/init')).json()).tonight.timeMs).toBe(16_000);
   });
 
   it('GET /mysky and /leaderboards reflect a play', async () => {
@@ -225,7 +214,7 @@ describe('POST /sharePost', () => {
     live.posts = [];
   });
 
-  const solve = { difficulty: 'hard', timeMs: 42_000, whispers: 1, glitches: 2 };
+  const solve = { timeMs: 42_000, whispers: 1, glitches: 2 };
   const post = () =>
     api.request('/complete', {
       method: 'POST',
@@ -243,7 +232,8 @@ describe('POST /sharePost', () => {
     expect(live.posts).toHaveLength(1);
     expect(live.posts[0]?.runAs).toBe('USER');
     expect(live.posts[0]?.title).toContain('TaaraNight #');
-    expect(live.posts[0]?.text).toContain('Mode: Hard');
+    expect(live.posts[0]?.text).not.toContain('Mode');
+    expect(live.posts[0]?.text).toContain('1 Whisper used');
     expect(live.posts[0]?.text).toContain('reddit.com/r/taara_connect_dev/comments/night10');
     const name = (await import('../../shared/puzzleEngine')).selectConstellationForNight(10).name;
     expect(live.posts[0]?.text).not.toContain(name);

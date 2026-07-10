@@ -102,7 +102,6 @@ api.post('/complete', async (c) => {
         alreadyPlayed: false,
         result: {
           night,
-          difficulty: request.difficulty,
           timeMs: request.timeMs,
           whispers: request.whispers,
           glitches: request.glitches,

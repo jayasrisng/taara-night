@@ -2,38 +2,40 @@
  * Dev-only preview helpers for sanity-checking the nightly puzzle engine.
  *
  * Not shipped to players (it would spoil the constellation names). Used to
- * eyeball variety across consecutive nights during development/verification.
+ * eyeball the weekday ramp — gentle Monday → monster Sunday — across
+ * consecutive nights during development/verification.
  */
 
-import type { Difficulty } from './constellations';
 import { generatePuzzle } from './puzzleEngine';
-import { nightNumberAt } from './nightSeed';
+import { nightNumberAt, weekdayOfNight } from './nightSeed';
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 /** A one-line summary of a single night's puzzle. */
-export function describeNight(night: number, difficulty: Difficulty = 'hard'): string {
-  const puzzle = generatePuzzle(night, difficulty);
+export function describeNight(night: number): string {
+  const puzzle = generatePuzzle(night);
   const decoys = puzzle.stars.filter((s) => s.isDecoy).length;
   return (
     `${puzzle.label.padEnd(16)} ` +
+    `${WEEKDAYS[weekdayOfNight(night)]} ` +
     `${puzzle.constellationId.padEnd(16)} ` +
-    `real:${puzzle.realStarCount} ` +
-    `glitch:${decoys} ` +
-    `solution-edges:${puzzle.solution.length} ` +
-    `[${difficulty}]`
+    `real:${String(puzzle.realStarCount).padStart(2)} ` +
+    `glitch:${String(decoys).padStart(2)} ` +
+    `solution-edges:${puzzle.solution.length}`
   );
 }
 
 /** A multi-line table describing `count` consecutive nights from `startNight`. */
-export function previewNights(startNight: number, count: number, difficulty: Difficulty = 'hard'): string {
+export function previewNights(startNight: number, count: number): string {
   const lines: string[] = [];
   for (let n = startNight; n < startNight + count; n++) {
-    lines.push(describeNight(n, difficulty));
+    lines.push(describeNight(n));
   }
   return lines.join('\n');
 }
 
-/** Convenience: preview the 7 nights starting at whatever tonight's night is. */
-export function previewUpcomingWeek(now: number | Date = Date.now(), difficulty: Difficulty = 'hard'): string {
+/** Convenience: preview the two-week ramp starting at whatever tonight's night is. */
+export function previewUpcomingWeek(now: number | Date = Date.now()): string {
   const tonight = Math.max(1, nightNumberAt(now));
-  return previewNights(tonight, 7, difficulty);
+  return previewNights(tonight, 14);
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_GLITCHES, MAX_TIME_MS, validateCompleteRequest } from './validate';
 
-const valid = { difficulty: 'medium', timeMs: 42_000, whispers: 1, glitches: 2 };
+const valid = { timeMs: 42_000, whispers: 1, glitches: 2 };
 
 function expectMessage(body: unknown): string {
   const result = validateCompleteRequest(body);
@@ -20,11 +20,6 @@ describe('validateCompleteRequest', () => {
     expect(expectMessage('hard')).toMatch(/object/);
   });
 
-  it('rejects an unknown difficulty', () => {
-    expect(expectMessage({ ...valid, difficulty: 'nightmare' })).toMatch(/difficulty/);
-    expect(expectMessage({ ...valid, difficulty: undefined })).toMatch(/difficulty/);
-  });
-
   it('rejects negative or fractional counts', () => {
     expect(expectMessage({ ...valid, timeMs: -1 })).toMatch(/timeMs/);
     expect(expectMessage({ ...valid, timeMs: 1.5 })).toMatch(/timeMs/);
@@ -32,8 +27,9 @@ describe('validateCompleteRequest', () => {
     expect(expectMessage({ ...valid, glitches: -3 })).toMatch(/glitches/);
   });
 
-  it('rejects more Whispers than the difficulty allows', () => {
-    expect(expectMessage({ ...valid, whispers: 4 })).toMatch(/at most 3/);
+  it('accepts unlimited Whispers — there is no cap anymore', () => {
+    const result = validateCompleteRequest({ ...valid, whispers: 40 });
+    expect(result.ok && result.value.whispers).toBe(40);
   });
 
   it('clamps an absurd solve time and Glitch count', () => {

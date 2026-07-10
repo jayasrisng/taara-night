@@ -10,7 +10,6 @@
  *   tn:result:{n}:{user}    hash   that user's result for night n (write-once)
  *   tn:jwala:{user}         hash   { current, longest, lastNight }
  *   tn:sky:{user}           zset   member = constellationId, score = night
- *   tn:result:{n}:{user}:{d} hash  that user's result for night n on mode d
  *   tn:lb:{n}:night         zset   member = user, score = packed night score
  *   tn:lb:jwala             zset   member = user, score = current streak
  *   tn:share:{n}:{user}     str    permalink of that user's share comment
@@ -34,8 +33,6 @@ export const keys = {
   result: (night: number, username: string): string => `${PREFIX}:result:${night}:${username}`,
   jwala: (username: string): string => `${PREFIX}:jwala:${username}`,
   sky: (username: string): string => `${PREFIX}:sky:${username}`,
-  resultDiff: (night: number, username: string, difficulty: string): string =>
-    `${PREFIX}:result:${night}:${username}:${difficulty}`,
   lbNight: (night: number): string => `${PREFIX}:lb:${night}:night`,
   lbJwala: (): string => `${PREFIX}:lb:jwala`,
   share: (night: number, username: string): string => `${PREFIX}:share:${night}:${username}`,
@@ -47,39 +44,37 @@ export const keys = {
 
 /**
  * The unified nightly board stores one number per player, so the whole ranking
- * is packed into it, most significant first: the mode (Hard beats Medium beats
- * Easy), then fewer Glitches, then less time, then fewer Whispers. Ascending
- * zset order *is* the leaderboard.
+ * is packed into it, most significant first: less time, then fewer Glitches,
+ * then fewer Whispers. Ascending zset order *is* the leaderboard — the fastest
+ * solve wins, and Glitches/Whispers only break ties. One game per night, so
+ * there is no mode to rank by anymore.
+ *
+ * The Glitch and Whisper counts also live on the result hash (that is the
+ * authoritative record); packing them here too lets a board row carry its
+ * honesty tags without a second read per row.
  *
  * Budget (all integer-safe, well under 2^53):
- *   rank    × 1e13   0 hard · 1 medium · 2 easy
- *   glitches× 1e10   capped 999
- *   timeMs  × 1e2    capped 9,999,999 ms (~2.8 h)
+ *   timeMs  × 1e5    capped 9,999,999 ms (~2.8 h)
+ *   glitches× 1e2    capped 999
  *   whispers× 1      capped 99
  */
-const RANKS = { hard: 0, medium: 1, easy: 2 } as const;
-const RANK_NAMES = ['hard', 'medium', 'easy'] as const;
-
 export interface NightScoreParts {
-  difficulty: 'easy' | 'medium' | 'hard';
-  glitches: number;
   timeMs: number;
+  glitches: number;
   whispers: number;
 }
 
 export function nightScore(parts: NightScoreParts): number {
-  const rank = RANKS[parts.difficulty];
-  const glitches = Math.min(Math.max(parts.glitches, 0), 999);
   const timeMs = Math.min(Math.max(parts.timeMs, 0), 9_999_999);
+  const glitches = Math.min(Math.max(parts.glitches, 0), 999);
   const whispers = Math.min(Math.max(parts.whispers, 0), 99);
-  return rank * 1e13 + glitches * 1e10 + timeMs * 1e2 + whispers;
+  return timeMs * 1e5 + glitches * 1e2 + whispers;
 }
 
 /** Unpack a board score back into the row it describes. */
 export function nightScoreParts(score: number): NightScoreParts {
-  const rank = Math.min(Math.floor(score / 1e13), 2);
-  const glitches = Math.floor((score % 1e13) / 1e10);
-  const timeMs = Math.floor((score % 1e10) / 1e2);
+  const timeMs = Math.floor(score / 1e5);
+  const glitches = Math.floor((score % 1e5) / 1e2);
   const whispers = Math.floor(score % 1e2);
-  return { difficulty: RANK_NAMES[rank]!, glitches, timeMs, whispers };
+  return { timeMs, glitches, whispers };
 }

@@ -1,21 +1,36 @@
 /**
- * Tests for the nightly puzzle engine: determinism, difficulty differences,
- * the no-repeat window, and star-field integrity.
+ * Tests for the nightly puzzle engine: determinism, the weekday ramp (gentle
+ * Monday → monster Sunday), the no-repeat window, and star-field integrity.
+ * There is one game per night — no difficulty modes.
  */
 
 import { describe, it, expect } from 'vitest';
-import type { Difficulty } from './constellations';
 import { getConstellationById } from './constellationLoader';
+import { weekdayOfNight } from './nightSeed';
 import {
   NO_REPEAT_WINDOW,
-  DIFFICULTY_PARAMS,
+  nightParams,
   selectConstellationForNight,
   selectConstellationIndexForNight,
   generatePuzzle,
 } from './puzzleEngine';
 
-const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
 const SAMPLE_NIGHTS = [1, 2, 3, 7, 8, 15, 16, 42, 100];
+
+// Ten launch weeks, starting on the first Monday-night (2026-07-06), so every
+// weekday is exercised many times.
+const RAMP_NIGHTS = Array.from({ length: 70 }, (_, i) => 6 + i);
+
+// Weekday index (0 = Sun … 6 = Sat) → expected Glitch count from WEEKDAY_RAMP.
+const EXPECTED_GLITCHES: Record<number, number> = {
+  1: 2, // Mon
+  2: 3, // Tue
+  3: 4, // Wed
+  4: 6, // Thu
+  5: 8, // Fri
+  6: 10, // Sat
+  0: 12, // Sun
+};
 
 describe('selection: determinism', () => {
   it('returns the same constellation for the same night every time', () => {
@@ -58,122 +73,127 @@ describe('selection: no repeats within the window', () => {
   });
 });
 
-describe('difficulty parameters', () => {
-  it('easy has the outline, no decoys, no timer and no Whispers', () => {
-    expect(DIFFICULTY_PARAMS.easy.showOutline).toBe(true);
-    expect(DIFFICULTY_PARAMS.easy.decoyCount).toBe(0);
-    expect(DIFFICULTY_PARAMS.easy.timed).toBe(false);
-    expect(DIFFICULTY_PARAMS.easy.maxWhispers).toBe(0);
+describe('night params', () => {
+  it('runs one game: no outline, no count, timer always on', () => {
+    for (const night of SAMPLE_NIGHTS) {
+      const params = nightParams(night);
+      expect(params.showOutline).toBe(false);
+      expect(params.showStarCountHint).toBe(false);
+      expect(params.timed).toBe(true);
+    }
   });
 
-  it('medium drops the outline and adds a few decoys, a star count and Whispers', () => {
-    expect(DIFFICULTY_PARAMS.medium.showOutline).toBe(false);
-    expect(DIFFICULTY_PARAMS.medium.decoyCount).toBeGreaterThan(0);
-    expect(DIFFICULTY_PARAMS.medium.showStarCountHint).toBe(true);
-    expect(DIFFICULTY_PARAMS.medium.timed).toBe(false);
-    expect(DIFFICULTY_PARAMS.medium.maxWhispers).toBe(3);
+  it('gives an effectively unlimited Whisper allowance', () => {
+    // The old cap was 3; Whispers are now limited only by a client-side cooldown.
+    expect(nightParams(8).maxWhispers).toBeGreaterThan(3);
   });
 
-  it('hard drops the star count and adds a timer and many more decoys', () => {
-    expect(DIFFICULTY_PARAMS.hard.showOutline).toBe(false);
-    expect(DIFFICULTY_PARAMS.hard.showStarCountHint).toBe(false);
-    expect(DIFFICULTY_PARAMS.hard.decoyCount).toBeGreaterThan(2 * DIFFICULTY_PARAMS.medium.decoyCount);
-    expect(DIFFICULTY_PARAMS.hard.timed).toBe(true);
+  it('sets the Glitch count from the night’s weekday ramp', () => {
+    for (const night of RAMP_NIGHTS) {
+      const expected = EXPECTED_GLITCHES[weekdayOfNight(night)]!;
+      expect(nightParams(night).decoyCount).toBe(expected);
+    }
   });
 
-  it('caps Whispers at 3 on hard', () => {
-    expect(DIFFICULTY_PARAMS.hard.maxWhispers).toBe(3);
+  it('ramps Glitches gentle Monday → monster Sunday (2/3/4/6/8/10/12)', () => {
+    // Nights 6..12 are Mon..Sun of the launch week.
+    const week = [6, 7, 8, 9, 10, 11, 12].map((n) => nightParams(n).decoyCount);
+    expect(week).toEqual([2, 3, 4, 6, 8, 10, 12]);
+  });
+});
+
+describe('selection: weekday star-count band', () => {
+  it('keeps the constellation inside the weekday band across ten weeks', () => {
+    for (const night of RAMP_NIGHTS) {
+      const stars = selectConstellationForNight(night).stars.length;
+      switch (weekdayOfNight(night)) {
+        case 1: // Mon — ≤6
+          expect(stars).toBeLessThanOrEqual(6);
+          break;
+        case 2: // Tue — 7
+          expect(stars).toBe(7);
+          break;
+        case 3: // Wed — 8
+          expect(stars).toBe(8);
+          break;
+        case 4: // Thu — 9
+          expect(stars).toBe(9);
+          break;
+        case 5: // Fri — 10
+          expect(stars).toBe(10);
+          break;
+        case 6: // Sat — 11
+          expect(stars).toBe(11);
+          break;
+        case 0: // Sun — ≥12
+          expect(stars).toBeGreaterThanOrEqual(12);
+          break;
+      }
+    }
   });
 
-  it('makes each mode differ from the next by more than one setting', () => {
-    const { easy, medium, hard } = DIFFICULTY_PARAMS;
-    // Easy → Medium: the outline goes, decoys and Whispers arrive.
-    expect(easy.showOutline).not.toBe(medium.showOutline);
-    expect(easy.decoyCount).not.toBe(medium.decoyCount);
-    expect(easy.maxWhispers).not.toBe(medium.maxWhispers);
-    // Medium → Hard: the count goes, the timer starts, the decoys multiply.
-    expect(medium.showStarCountHint).not.toBe(hard.showStarCountHint);
-    expect(medium.timed).not.toBe(hard.timed);
-    expect(medium.decoyCount).not.toBe(hard.decoyCount);
+  it('runs Sunday skies larger than Monday skies on average', () => {
+    const avg = (weekday: number) => {
+      const counts = RAMP_NIGHTS.filter((n) => weekdayOfNight(n) === weekday).map(
+        (n) => selectConstellationForNight(n).stars.length
+      );
+      return counts.reduce((a, b) => a + b, 0) / counts.length;
+    };
+    expect(avg(0 /* Sun */)).toBeGreaterThan(avg(1 /* Mon */));
   });
 });
 
 describe('generatePuzzle: determinism', () => {
-  it('produces byte-for-byte identical puzzles for the same (night, difficulty)', () => {
+  it('produces byte-for-byte identical puzzles for the same night', () => {
     for (const night of SAMPLE_NIGHTS) {
-      for (const difficulty of DIFFICULTIES) {
-        const a = generatePuzzle(night, difficulty);
-        const b = generatePuzzle(night, difficulty);
-        expect(JSON.stringify(a)).toBe(JSON.stringify(b));
-      }
-    }
-  });
-});
-
-describe('generatePuzzle: constellation shared across difficulties', () => {
-  it('uses the same constellation for every difficulty of a given night', () => {
-    for (const night of SAMPLE_NIGHTS) {
-      const easy = generatePuzzle(night, 'easy');
-      const medium = generatePuzzle(night, 'medium');
-      const hard = generatePuzzle(night, 'hard');
-      expect(easy.constellationId).toBe(medium.constellationId);
-      expect(medium.constellationId).toBe(hard.constellationId);
-      expect(easy.story).toBe(hard.story);
+      const a = generatePuzzle(night);
+      const b = generatePuzzle(night);
+      expect(JSON.stringify(a)).toBe(JSON.stringify(b));
     }
   });
 });
 
 describe('generatePuzzle: star field integrity', () => {
-  it('has the right decoy count and total star count per difficulty', () => {
-    for (const night of SAMPLE_NIGHTS) {
-      for (const difficulty of DIFFICULTIES) {
-        const puzzle = generatePuzzle(night, difficulty);
-        const decoys = puzzle.stars.filter((s) => s.isDecoy);
-        const real = puzzle.stars.filter((s) => !s.isDecoy);
-        expect(decoys.length).toBe(DIFFICULTY_PARAMS[difficulty].decoyCount);
-        expect(real.length).toBe(puzzle.realStarCount);
-        expect(puzzle.stars.length).toBe(real.length + decoys.length);
-      }
+  it('has the ramp’s Glitch count and a matching total star count', () => {
+    for (const night of RAMP_NIGHTS) {
+      const puzzle = generatePuzzle(night);
+      const decoys = puzzle.stars.filter((s) => s.isDecoy);
+      const real = puzzle.stars.filter((s) => !s.isDecoy);
+      expect(decoys.length).toBe(nightParams(night).decoyCount);
+      expect(real.length).toBe(puzzle.realStarCount);
+      expect(puzzle.stars.length).toBe(real.length + decoys.length);
     }
   });
 
   it('never starves the decoy scatter, however crowded the constellation', () => {
-    // Hard scatters twelve Glitches around up to ten real stars, all held apart
-    // by a minimum distance. Sixty nights covers every constellation.
-    for (let night = 1; night <= 60; night++) {
-      const decoys = generatePuzzle(night, 'hard').stars.filter((s) => s.isDecoy);
-      expect(decoys.length).toBe(DIFFICULTY_PARAMS.hard.decoyCount);
-    }
-  });
-
-  it('gives easy zero decoys (only real stars)', () => {
-    for (const night of SAMPLE_NIGHTS) {
-      const puzzle = generatePuzzle(night, 'easy');
-      expect(puzzle.stars.every((s) => !s.isDecoy)).toBe(true);
+    // Monster Sundays scatter twelve Glitches around a dozen-plus real stars, all
+    // held apart by a minimum distance. Ten weeks covers every weekday band.
+    for (const night of RAMP_NIGHTS) {
+      const puzzle = generatePuzzle(night);
+      const decoys = puzzle.stars.filter((s) => s.isDecoy);
+      expect(decoys.length).toBe(nightParams(night).decoyCount);
     }
   });
 
   it('keeps every star inside the 0–1 box', () => {
     for (const night of SAMPLE_NIGHTS) {
-      for (const difficulty of DIFFICULTIES) {
-        for (const star of generatePuzzle(night, difficulty).stars) {
-          expect(star.x).toBeGreaterThanOrEqual(0);
-          expect(star.x).toBeLessThanOrEqual(1);
-          expect(star.y).toBeGreaterThanOrEqual(0);
-          expect(star.y).toBeLessThanOrEqual(1);
-        }
+      for (const star of generatePuzzle(night).stars) {
+        expect(star.x).toBeGreaterThanOrEqual(0);
+        expect(star.x).toBeLessThanOrEqual(1);
+        expect(star.y).toBeGreaterThanOrEqual(0);
+        expect(star.y).toBeLessThanOrEqual(1);
       }
     }
   });
 
   it('assigns contiguous ids equal to array position', () => {
-    const puzzle = generatePuzzle(8, 'hard');
+    const puzzle = generatePuzzle(8);
     puzzle.stars.forEach((star, index) => expect(star.id).toBe(index));
   });
 
   it('keeps decoys clear of real stars (minimum spacing)', () => {
     const MIN = 0.09;
-    const puzzle = generatePuzzle(8, 'hard');
+    const puzzle = generatePuzzle(12); // a Sunday — the most crowded field
     const real = puzzle.stars.filter((s) => !s.isDecoy);
     const decoys = puzzle.stars.filter((s) => s.isDecoy);
     for (const d of decoys) {
@@ -185,7 +205,7 @@ describe('generatePuzzle: star field integrity', () => {
   });
 
   it('only real stars carry a sourceIndex; decoys carry none', () => {
-    const puzzle = generatePuzzle(8, 'hard');
+    const puzzle = generatePuzzle(12);
     for (const star of puzzle.stars) {
       if (star.isDecoy) {
         expect(star.sourceIndex).toBeUndefined();
@@ -199,26 +219,24 @@ describe('generatePuzzle: star field integrity', () => {
 describe('generatePuzzle: solution correctness', () => {
   it('has one solution edge per source connection and references only real stars', () => {
     for (const night of SAMPLE_NIGHTS) {
-      for (const difficulty of DIFFICULTIES) {
-        const puzzle = generatePuzzle(night, difficulty);
-        const source = getConstellationById(puzzle.constellationId)!;
-        expect(puzzle.solution.length).toBe(source.connections.length);
+      const puzzle = generatePuzzle(night);
+      const source = getConstellationById(puzzle.constellationId)!;
+      expect(puzzle.solution.length).toBe(source.connections.length);
 
-        const byId = new Map(puzzle.stars.map((s) => [s.id, s]));
-        for (const edge of puzzle.solution) {
-          const from = byId.get(edge.from);
-          const to = byId.get(edge.to);
-          expect(from).toBeDefined();
-          expect(to).toBeDefined();
-          expect(from!.isDecoy).toBe(false);
-          expect(to!.isDecoy).toBe(false);
-        }
+      const byId = new Map(puzzle.stars.map((s) => [s.id, s]));
+      for (const edge of puzzle.solution) {
+        const from = byId.get(edge.from);
+        const to = byId.get(edge.to);
+        expect(from).toBeDefined();
+        expect(to).toBeDefined();
+        expect(from!.isDecoy).toBe(false);
+        expect(to!.isDecoy).toBe(false);
       }
     }
   });
 
   it('preserves the constellation shape (solution edges match source edges by position)', () => {
-    const puzzle = generatePuzzle(8, 'hard');
+    const puzzle = generatePuzzle(8);
     const source = getConstellationById(puzzle.constellationId)!;
 
     // Rebuild source-index → star position via sourceIndex, then confirm each
@@ -247,7 +265,7 @@ describe('generatePuzzle: solution correctness', () => {
 
 describe('generatePuzzle: labelling', () => {
   it('labels the puzzle "TaaraNight #N"', () => {
-    expect(generatePuzzle(12, 'easy').label).toBe('TaaraNight #12');
-    expect(generatePuzzle(12, 'easy').night).toBe(12);
+    expect(generatePuzzle(12).label).toBe('TaaraNight #12');
+    expect(generatePuzzle(12).night).toBe(12);
   });
 });

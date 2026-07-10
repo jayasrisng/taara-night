@@ -6,13 +6,11 @@
  * solved the puzzle; the server only ever speaks in ids, counts and nights.
  */
 
-import type { Difficulty } from './constellations';
 import type { JwalaState } from './jwala';
 
 /** What a player did on one night. Written once, on their first completion. */
 export type NightResult = {
   night: number;
-  difficulty: Difficulty;
   /** How long the solve took, in milliseconds. */
   timeMs: number;
   /** Whispers (hints) spent. */
@@ -50,7 +48,6 @@ export type InitResponse = {
 };
 
 export type CompleteRequest = {
-  difficulty: Difficulty;
   timeMs: number;
   whispers: number;
   glitches: number;
@@ -98,14 +95,15 @@ export type LeaderboardEntry = {
   rank: number;
 };
 
-/** One row of the unified nightly board. */
+/** One row of the unified nightly board — the night's stargazers, fastest first. */
 export type NightBoardEntry = {
   username: string;
   /** 1-based. */
   rank: number;
-  difficulty: 'easy' | 'medium' | 'hard';
-  glitches: number;
+  /** The solve time, in milliseconds — the board's sort key. */
   timeMs: number;
+  /** Glitches touched and Whispers spent, for the row's honesty tags. */
+  glitches: number;
   whispers: number;
 };
 
@@ -113,8 +111,8 @@ export type LeaderboardsResponse = {
   type: 'leaderboards';
   night: number;
   /**
-   * The one board for the night: Hard above Medium above Easy, then fewer
-   * Glitches, then less time, then fewer Whispers. Valid for the night.
+   * The one board for the night: fastest solve first, Glitches then Whispers as
+   * tiebreaks. Valid for the night.
    */
   tonight: NightBoardEntry[];
   /** Longest burning Jwala, all-time. */
