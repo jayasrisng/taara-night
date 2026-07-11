@@ -69,13 +69,13 @@ export const color = {
   /* ---- the one warm accent, bright to deep (hue 42°) ---- */
 
   /** A thread the player has drawn, and the light along it. */
-  accentBright: 0xfff0cc,
-  /** The accent proper: borders, captions worth reading, Whispers. */
-  accent: 0xffe3a3,
+  accentBright: 0xf6ecd8,
+  /** The accent proper: borders, captions worth reading, Whispers. Champagne. */
+  accent: 0xe8cf9e,
   /** Its halo — glows, strokes, the shadow under warm type. */
-  accentGlow: 0xffd77a,
+  accentGlow: 0xd4b276,
   /** The deepest step. The Jwala flame, and nothing else. */
-  accentDeep: 0xffcb52,
+  accentDeep: 0xbf9a55,
 
   /* ---- starlight ---- */
 
@@ -119,21 +119,11 @@ export const ink = {
   accentDeep: hex(color.accentDeep),
 } as const;
 
-/**
- * One colour per difficulty, read before the label is: green is permission, gold
- * is the game's own colour, rose is the same rose a wrong thread flashes.
- */
-export const difficulty = {
-  easy: 0xbfe6c9,
-  medium: color.accent,
-  hard: color.wrong,
-} as const;
-
 export const font = {
   /** Titles, stories, anything the player is meant to slow down for. */
-  serif: 'Georgia, "Times New Roman", serif',
+  serif: 'Fraunces, Georgia, "Times New Roman", serif',
   /** Labels, numbers, anything the player is meant to read at a glance. */
-  sans: 'Arial, Helvetica, sans-serif',
+  sans: 'Inter, Arial, Helvetica, sans-serif',
 } as const;
 
 /**

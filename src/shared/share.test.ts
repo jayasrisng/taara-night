@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { NightResult } from './api';
 import type { JwalaState } from './jwala';
 import { CONSTELLATION_DATA } from './constellationData';
-import { buildShareText } from './share';
+import { buildSharePost, buildShareText } from './share';
 
 const result = (over: Partial<NightResult> = {}): NightResult => ({
   night: 12,
@@ -58,5 +58,13 @@ describe('buildShareText', () => {
 
   it('uses markdown hard breaks so the card keeps its shape in a comment', () => {
     expect(buildShareText(result(), jwala(2)).split('  \n')).toHaveLength(5);
+  });
+});
+
+describe('buildSharePost', () => {
+  it('pluralises Glitch as "Glitches", not "Glitchs"', () => {
+    expect(buildSharePost(result({ glitches: 2 }), jwala(1), null).text).toContain('2 Glitches touched');
+    expect(buildSharePost(result({ glitches: 1 }), jwala(1), null).text).toContain('1 Glitch touched');
+    expect(buildSharePost(result({ glitches: 0 }), jwala(1), null).text).toContain('No Glitches touched');
   });
 });

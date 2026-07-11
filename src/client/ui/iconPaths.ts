@@ -26,7 +26,7 @@ export interface IconPath {
   closed: boolean;
 }
 
-export type IconName = 'moon' | 'sparkle' | 'sound' | 'mute' | 'thread' | 'flame' | 'check' | 'star';
+export type IconName = 'moon' | 'sparkle' | 'sound' | 'mute' | 'thread' | 'flame' | 'check' | 'star' | 'comment' | 'share';
 
 /** Points along a circular arc, `steps` segments from `from` to `to` (radians, y down). */
 function arc(cx: number, cy: number, r: number, from: number, to: number, steps: number): Pt[] {
@@ -163,6 +163,54 @@ function star(): IconPath[] {
     pieces.push(cubic(a, control, control, b, 4));
   }
   return [{ points: chain(...pieces).slice(0, -1), closed: true }];
+}
+
+/** A speech bubble: the auto-comment share. */
+function comment(): IconPath[] {
+  const r = 0.14;
+  const body = chain(
+    arc(-0.36 + r, -0.34 + r, r, Math.PI, Math.PI * 1.5, 5),
+    arc(0.44 - r, -0.34 + r, r, Math.PI * 1.5, TAU, 5),
+    arc(0.44 - r, 0.18 - r, r, 0, Math.PI * 0.5, 5),
+    [
+      { x: 0.44 - r, y: 0.18 },
+      { x: -0.06, y: 0.18 },
+      { x: -0.2, y: 0.4 },
+      { x: -0.18, y: 0.18 },
+    ],
+    arc(-0.36 + r, 0.18 - r, r, Math.PI * 0.5, Math.PI, 5)
+  ).slice(0, -1);
+  return [{ points: body, closed: true }];
+}
+
+/** An arrow lifting out of a tray: copy it anywhere. */
+function share(): IconPath[] {
+  return [
+    {
+      points: [
+        { x: -0.34, y: 0.06 },
+        { x: -0.34, y: 0.4 },
+        { x: 0.34, y: 0.4 },
+        { x: 0.34, y: 0.06 },
+      ],
+      closed: false,
+    },
+    {
+      points: [
+        { x: 0, y: 0.16 },
+        { x: 0, y: -0.42 },
+      ],
+      closed: false,
+    },
+    {
+      points: [
+        { x: -0.16, y: -0.24 },
+        { x: 0, y: -0.42 },
+        { x: 0.16, y: -0.24 },
+      ],
+      closed: false,
+    },
+  ];
 }
 
 /** The speaker body both sound icons are built on. */
@@ -321,6 +369,8 @@ const BUILDERS: Readonly<Record<IconName, () => IconPath[]>> = {
   flame,
   check,
   star,
+  comment,
+  share,
 };
 
 /** The paths for one icon, in the unit box. Rebuilt per call; callers scale them. */

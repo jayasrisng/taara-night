@@ -34,10 +34,7 @@ const VIGNETTE_ALPHA = 0.38;
  */
 const MOON_RADIUS = 22;
 const CORONA_SCALE = 1.1;
-const CORONA_ALPHA = 0.16;
-const LIMB_SHADOW = 0xb7b4ce;
-const CRATER = 0xd7d4ea;
-const CRATER_SHINE = 0xfffbff;
+const CORONA_ALPHA = 0.08;
 
 interface BgStar {
   nx: number; // normalized 0–1 across the screen
@@ -68,8 +65,9 @@ export class NightSky {
       .setAlpha(CORONA_ALPHA)
       .setScale(texScale(CORONA_SCALE))
       .setTint(color.starlight);
-    this.moon = scene.add.circle(0, 0, MOON_RADIUS, color.moon);
-    this.moonDetail = scene.add.graphics();
+    // A quarter-light crescent: the moon is scenery, never a lamp over the game.
+    this.moon = scene.add.circle(0, 0, MOON_RADIUS, color.moon).setAlpha(0);
+    this.moonDetail = scene.add.graphics().setAlpha(0.25);
 
     const count = 90;
     for (let i = 0; i < count; i++) {
@@ -132,32 +130,19 @@ export class NightSky {
   private drawMoon(x: number, y: number): void {
     this.moonDetail.clear();
 
-    this.moonDetail.fillStyle(color.starlight, 0.28);
-    this.moonDetail.fillCircle(x - 7, y - 7, 8);
-
-    this.moonDetail.fillStyle(LIMB_SHADOW, 0.28);
-    this.moonDetail.slice(x + 1, y + 1, MOON_RADIUS - 1, Phaser.Math.DegToRad(286), Phaser.Math.DegToRad(112), false);
-    this.moonDetail.fillPath();
-
-    this.moonDetail.lineStyle(1.25, color.starlight, 0.62);
-    this.moonDetail.strokeCircle(x, y, MOON_RADIUS - 0.5);
-    this.moonDetail.lineStyle(2, color.accent, 0.18);
+    // A waning crescent: the disc, minus a second disc pushed towards its
+    // light. Drawn as one filled shape so the 25% alpha stays uniform.
+    const r = MOON_RADIUS;
+    this.moonDetail.fillStyle(color.moon, 1);
     this.moonDetail.beginPath();
-    this.moonDetail.arc(x - 3, y - 3, MOON_RADIUS - 3, Phaser.Math.DegToRad(224), Phaser.Math.DegToRad(322), false);
-    this.moonDetail.strokePath();
-
-    this.crater(x - 7, y + 3, 4.3);
-    this.crater(x + 6, y - 5, 3.4);
-    this.crater(x + 7, y + 8, 2.7);
-    this.crater(x - 1, y - 10, 2.2);
+    // Outer limb, top to bottom on the left.
+    this.moonDetail.arc(x, y, r, Phaser.Math.DegToRad(110), Phaser.Math.DegToRad(250), false);
+    // Inner curve back up — the shadowed disc's edge.
+    this.moonDetail.arc(x + r * 0.55, y, r * 0.82, Phaser.Math.DegToRad(235), Phaser.Math.DegToRad(125), true);
+    this.moonDetail.closePath();
+    this.moonDetail.fillPath();
   }
 
-  private crater(x: number, y: number, r: number): void {
-    this.moonDetail.fillStyle(CRATER, 0.18);
-    this.moonDetail.fillCircle(x, y, r);
-    this.moonDetail.lineStyle(0.8, CRATER_SHINE, 0.22);
-    this.moonDetail.strokeCircle(x - r * 0.08, y - r * 0.08, r);
-  }
 
   private scheduleShootingStar(): void {
     const wait = 4200 + this.rng() * 7000;

@@ -22,15 +22,15 @@ import { alpha, color, control, font, hairline, ink, radius, space, typeScale } 
 
 /** The verb, the forgiveness, the reward — each with the icon that means it. */
 const HINTS: { icon: IconName; text: string }[] = [
-  { icon: 'thread', text: 'Drag from one star to another — or tap one, then the next.' },
-  { icon: 'sparkle', text: 'A wrong thread simply fades. Nothing is lost; take your time.' },
-  { icon: 'moon', text: 'Complete the shape, and tonight’s story wakes.' },
+  { icon: 'thread', text: 'Connect the stars.' },
+  { icon: 'star', text: 'Glitches deceive — wrong pairs shake.' },
+  { icon: 'moon', text: 'Finish the figure, wake its story.' },
 ];
 
-const TITLE = 'Before you begin';
+const TITLE = 'How to play';
 
 /** What the card's button says when it is about to hand over a puzzle. */
-export const OPEN_THE_SKY = 'Open the sky';
+export const OPEN_THE_SKY = 'Play';
 
 const DEPTH = 60;
 

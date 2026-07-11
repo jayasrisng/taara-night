@@ -34,7 +34,6 @@ import { clamp, contentWidth, gutter, margin, type Viewport } from '../ui/frame'
 import { onLayout } from '../ui/layout';
 import { duration, ease, enter, leaveTo, motion, tween } from '../ui/motion';
 import { Pill } from '../ui/Pill';
-import { showToast } from '@devvit/web/client';
 import { prefs } from '../ui/prefs';
 import { StoryCard } from '../ui/StoryCard';
 import { color, control, font, hairline, ink, space, typeScale } from '../ui/theme';
@@ -547,7 +546,6 @@ export class MySky extends Scene {
     const names = new Pill(this, '', { minWidth: control.md, paddingX: space.sm, icon: 'star' }, () => {
       prefs.set({ starNames: !prefs.starNames });
       names.setActive(prefs.starNames);
-      showToast(prefs.starNames ? 'Star names on' : 'Star names off');
       this.buildFigures();
       this.redraw();
     });
@@ -858,7 +856,7 @@ export class MySky extends Scene {
       narrationId: constellation.id,
       buttonLabel: 'Close',
       onButton: () => this.closeStory(),
-      ...(night ? { note: `Revealed on TaaraNight #${night}` } : {}),
+      ...(night ? { note: `Revealed on night #${night}` } : {}),
     });
     this.card.show(this.view, true);
   }
@@ -872,6 +870,6 @@ export class MySky extends Scene {
 
   private leave(): void {
     if (this.params.results) leaveTo(this, 'Results', this.params.results);
-    else leaveTo(this, 'MainMenu');
+    else leaveTo(this, 'Boot');
   }
 }

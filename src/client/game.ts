@@ -1,4 +1,4 @@
-import { MainMenu } from './scenes/MainMenu';
+import { Boot } from './scenes/Boot';
 import { MySky } from './scenes/MySky';
 import { Play } from './scenes/Play';
 import { Results } from './scenes/Results';
@@ -45,7 +45,7 @@ const StartGame = (parentId: string): Game => {
       height,
       zoom: 1 / DPR,
     },
-    scene: [MainMenu, Play, Results, MySky, ConstellationDebug],
+    scene: [Boot, Play, Results, MySky, ConstellationDebug],
   });
 
   if (new URLSearchParams(window.location.search).get('capture') === '1') {
@@ -76,7 +76,23 @@ function wakeSoundOnFirstGesture(): void {
   document.addEventListener('keydown', wake, { once: true });
 }
 
+/**
+ * The bundled faces must be resident before the first `Text` rasterises, or
+ * every label bakes in the fallback font and stays that way. `fonts.ready`
+ * resolves fast (the files are ~20 KB each, same origin); the timeout means a
+ * blocked font can delay the sky by at most a beat, never keep it dark.
+ */
+async function fontsFirst(): Promise<void> {
+  if (!('fonts' in document)) return;
+  const faces = ['400 16px Fraunces', '500 16px Fraunces', '400 16px Inter', '500 16px Inter'];
+  const load = Promise.all(faces.map((face) => document.fonts.load(face))).then(() => undefined);
+  const grace = new Promise<void>((resolve) => setTimeout(resolve, 1500));
+  await Promise.race([load, grace]);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-  StartGame('game-container');
-  wakeSoundOnFirstGesture();
+  void fontsFirst().then(() => {
+    StartGame('game-container');
+    wakeSoundOnFirstGesture();
+  });
 });

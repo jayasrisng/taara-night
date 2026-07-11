@@ -36,7 +36,10 @@ function jwalaLine(jwala: JwalaState): string {
 }
 
 function glitchLine(glitches: number): string {
-  return glitches === 0 ? 'No Glitches touched' : `${plural(glitches, 'Glitch')} touched`;
+  // "Glitch" pluralises to "Glitches", not the generic +s the helper appends.
+  return glitches === 0
+    ? 'No Glitches touched'
+    : `${glitches} ${glitches === 1 ? 'Glitch' : 'Glitches'} touched`;
 }
 
 /**

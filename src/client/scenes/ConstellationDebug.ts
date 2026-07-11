@@ -155,7 +155,7 @@ export class ConstellationDebug extends Scene {
   private setupControls(): void {
     this.input.keyboard?.on('keydown-LEFT', () => this.step(-1));
     this.input.keyboard?.on('keydown-RIGHT', () => this.step(1));
-    this.input.keyboard?.on('keydown-ESC', () => this.scene.start('MainMenu'));
+    this.input.keyboard?.on('keydown-ESC', () => this.scene.start('Boot'));
     this.input.on('pointerdown', () => this.step(1));
   }
 

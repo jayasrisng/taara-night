@@ -13,10 +13,9 @@
 
 import { Scene, GameObjects } from 'phaser';
 import * as Phaser from 'phaser';
-import type { Difficulty } from '../../shared/constellations';
 import { getConstellationById } from '../../shared/constellationLoader';
 import { generatePuzzle, type NightlyPuzzle, type PuzzleStar } from '../../shared/puzzleEngine';
-import { nightNumberAt } from '../../shared/nightSeed';
+import { nightEndUtc, nightNumberAt } from '../../shared/nightSeed';
 import { mulberry32 } from '../../shared/rng';
 import { ambience, setSound } from '../audio/ambience';
 import { NightSky } from '../ui/NightSky';
@@ -24,15 +23,15 @@ import { Onboarding, needsOnboarding } from '../ui/Onboarding';
 import { crispText, texScale } from '../ui/display';
 import { clamp, contentWidth, gutter, margin, rhythm, type Viewport } from '../ui/frame';
 import type { IconName } from '../ui/icons';
+import { untilNextSky } from '../ui/countdown';
 import { onLayout } from '../ui/layout';
 import { duration, ease, enter, leaveTo, motion, tween } from '../ui/motion';
 import { Pill } from '../ui/Pill';
 import { MIN_TAP } from '../ui/pressable';
 import { prefs } from '../ui/prefs';
 import { StoryCard } from '../ui/StoryCard';
-import { alpha, color, control, font, glow, hex, ink, space, typeScale } from '../ui/theme';
+import { alpha, color, control, font, glow, hairline, hex, ink, radius, space, typeScale } from '../ui/theme';
 import { TEX } from '../ui/textures';
-import { showToast } from '@devvit/web/client';
 import { postComplete } from '../api';
 import type { CompleteResponse } from '../../shared/api';
 import type { ResultsData } from './Results';
@@ -42,6 +41,10 @@ const TAP_THRESHOLD = 12;
 const TIMER_W = 78;
 /** Below this width the HUD stacks its title under the pill row. */
 const NARROW_W = 420;
+/** Whispers are unlimited, gated only by this cooldown between two of them. */
+const WHISPER_COOLDOWN_MS = 20_000;
+/** The one line under the night number, once modes are gone. Spoiler-safe. */
+const HINT_LINE = 'Connect the stars · avoid the Glitches';
 
 interface StarView {
   data: PuzzleStar;
@@ -56,7 +59,11 @@ interface Edge {
   progress: number;
 }
 
-type SceneData = { difficulty?: Difficulty; night?: number };
+type SceneData = {
+  night?: number;
+  /** Present when tonight is already finished: open the solved sky, not the game. */
+  solvedResults?: ResultsData;
+};
 
 function connKey(a: number, b: number): string {
   return a < b ? `${a}-${b}` : `${b}-${a}`;
@@ -94,6 +101,8 @@ export class Play extends Scene {
   private connected = new Set<string>();
   private edges: Edge[] = [];
 
+  /** The frame the game lives in — the board is a place, not loose stars. */
+  private boardGfx!: GameObjects.Graphics;
   private outlineGfx!: GameObjects.Graphics;
   private holoGfx: GameObjects.Graphics | null = null;
   private connectionGfx!: GameObjects.Graphics;
@@ -112,6 +121,9 @@ export class Play extends Scene {
   private storyCard: StoryCard | null = null;
   private readPill: Pill | null = null;
   private namesPill: Pill | null = null;
+  private afterStoryPill: Pill | null = null;
+  private countdownText: GameObjects.Text | null = null;
+  private afterActions = false;
   private namesNudge: GameObjects.Text | null = null;
   private revealName: GameObjects.Text | null = null;
   private revealMeaning: GameObjects.Text | null = null;
@@ -137,7 +149,10 @@ export class Play extends Scene {
 
   // Status.
   private complete = false;
-  private whispersLeft = 0;
+  /** Whispers spent this solve — unlimited, recorded for the share card and tags. */
+  private whispersSpent = 0;
+  /** `performance.now()` when the Whisper button becomes tappable again; 0 = ready. */
+  private whisperReadyAt = 0;
   private startTime = 0;
   private lastShownSecond = -1;
   private glowPulse = 0;
@@ -152,7 +167,10 @@ export class Play extends Scene {
     super('Play');
   }
 
+  private solvedResults: ResultsData | null = null;
+
   init(data: SceneData): void {
+    this.solvedResults = data.solvedResults ?? null;
     this.night = data.night ?? Math.max(1, nightNumberAt(Date.now()));
     this.starViews = [];
     this.byId = new Map();
@@ -173,6 +191,8 @@ export class Play extends Scene {
     this.dragging = false;
     this.hudPress = false;
     this.complete = false;
+    this.whispersSpent = 0;
+    this.whisperReadyAt = 0;
     this.lastShownSecond = -1;
     this.glowPulse = 0;
     this.glitchHits = 0;
@@ -183,7 +203,6 @@ export class Play extends Scene {
 
   create(): void {
     this.puzzle = generatePuzzle(this.night);
-    this.whispersLeft = this.puzzle.params.maxWhispers;
     // Not `this.time.now`: the scene Clock has not ticked when `create` runs, so
     // it still reads 0 and the timer would count from page load, not from now.
     this.startTime = performance.now();
@@ -195,6 +214,7 @@ export class Play extends Scene {
 
     this.sky = new NightSky(this, this.night);
 
+    this.boardGfx = this.add.graphics();
     this.outlineGfx = this.add.graphics();
     this.connectionGfx = this.add.graphics();
     this.hintGfx = this.add.graphics();
@@ -202,6 +222,14 @@ export class Play extends Scene {
 
     this.createStars();
     this.createHud();
+
+    if (this.solvedResults) {
+      this.enterSolvedView();
+      onLayout(this, (view) => this.layout(view));
+      this.registerInput();
+      enter(this);
+      return;
+    }
 
     // A first-ever player is told what to do before the clock starts on them,
     // then *shown*: a ghost comet traces the first real thread, twice.
@@ -222,12 +250,14 @@ export class Play extends Scene {
   }
 
   override update(): void {
-    if (this.tutorial || this.complete || !this.puzzle.params.timed) return;
+    if (this.tutorial || this.complete) return;
     const seconds = Math.floor((performance.now() - this.startTime) / 1000);
     if (seconds !== this.lastShownSecond) {
       this.lastShownSecond = seconds;
       this.timerPill.setLabel(mmss(seconds));
     }
+    // While a Whisper is cooling, its button counts itself back down to ready.
+    if (this.whisperReadyAt > 0) this.updateWhisperButton();
   }
 
   /* ---------------------------------------------------------------- *
@@ -261,19 +291,21 @@ export class Play extends Scene {
   }
 
   private createHud(): void {
-    this.titleText = crispText(this, 0, 0, this.puzzle.label, {
+    this.titleText = crispText(this, 0, 0, `#${this.puzzle.night}`, {
       fontFamily: font.serif,
       fontSize: `${typeScale.title}px`,
       color: ink.bright,
     }).setOrigin(0.5);
 
-    this.hintText = crispText(this, 0, 0, this.buildHintLabel(), {
+    this.hintText = crispText(this, 0, 0, HINT_LINE, {
       fontFamily: font.sans,
       fontSize: `${typeScale.body}px`,
       color: ink.muted,
     }).setOrigin(0.5);
 
-    this.backPill = new Pill(this, '‹ Back', { minWidth: 72 }, () => leaveTo(this, 'MainMenu'));
+    this.backPill = new Pill(this, '?', { minWidth: control.md, paddingX: space.sm, fontSize: typeScale.lead }, () =>
+      this.openHelp()
+    );
 
     // Icon only: the HUD names the mode and the Whispers left, and a fourth word
     // up there would be one more thing between the player and the stars.
@@ -287,30 +319,34 @@ export class Play extends Scene {
     );
     this.hudNamesPill.setActive(prefs.starNames);
 
+    // One game per night: the timer is always on.
     this.timerPill = new Pill(this, '0:00', { minWidth: TIMER_W });
-    this.timerPill.setVisible(this.puzzle.params.timed);
 
+    // Whispers are unlimited, so the button is always here — a 20-second cooldown
+    // is its only brake, counted down on its own face while it cools.
     this.whisperPill = new Pill(this, '', { minWidth: 150, icon: 'sparkle' }, () => this.useWhisper());
     this.updateWhisperButton();
-    this.whisperPill.setVisible(this.puzzle.params.maxWhispers > 0);
+  }
+
+  /** The three hints, re-readable. The sky holds still underneath, as on a first play. */
+  private openHelp(): void {
+    if (this.tutorial || this.complete) {
+      if (this.complete) return;
+      return;
+    }
+    this.tutorial = new Onboarding(
+      this,
+      () => {
+        this.tutorial = null;
+      },
+      'Close'
+    );
+    this.tutorial.layout(this.view);
   }
 
   private toggleSound(): void {
     setSound(!prefs.sound);
     this.soundPill.setIcon(soundIcon()).setActive(prefs.sound);
-  }
-
-  /**
-   * The one line that has to make the mode obvious before the player draws
-   * anything: it names the mode, then names what this mode gives and takes.
-   */
-  private buildHintLabel(): string {
-    const { showOutline, showStarCountHint, maxWhispers } = this.puzzle.params;
-    if (showOutline) return 'Easy · trace the glowing outline';
-    if (showStarCountHint) {
-      return `Medium · ${this.puzzle.realStarCount} true stars · avoid the Glitches`;
-    }
-    return `Hard · no outline, no count · ${maxWhispers} Whispers`;
   }
 
   /* ---------------------------------------------------------------- *
@@ -347,25 +383,47 @@ export class Play extends Scene {
 
     const leftGroup =
       this.backPill.width + controlGap + this.soundPill.width + controlGap + this.hudNamesPill.width;
-    const flank = Math.max(leftGroup, this.puzzle.params.timed ? this.timerPill.width : 0);
+    const flank = Math.max(leftGroup, this.timerPill.width);
     // The breathing room is real: a title that only *just* clears the pills reads
     // as a collision even when it technically isn't.
     const inline = this.titleText.width <= w - 2 * (sidePad + flank) - space.xxl;
 
     const titleY = inline ? rowY : edge + control.md + space.sm + this.titleText.height / 2;
     this.titleText.setPosition(w / 2, titleY);
-    this.hintText.setPosition(w / 2, titleY + this.titleText.height / 2 + space.xs + this.hintText.height / 2);
+    // Below whichever is lower: the title, or the control row itself — a short
+    // inline title must not pull the hint up into the icons.
+    const hintTop = Math.max(
+      titleY + this.titleText.height / 2,
+      edge + control.md + space.xs
+    );
+    this.hintText.setPosition(w / 2, hintTop + space.xs + this.hintText.height / 2);
 
     const topBar = this.hintText.y + this.hintText.height / 2 + rhythm(view);
 
     const whisperVisible = this.whisperPill.visible;
     if (whisperVisible) this.whisperPill.setPosition(w / 2, h - edge - control.md / 2);
-    const bottomBar = whisperVisible ? edge + control.md + rhythm(view) : edge;
+    // A finished sky reserves room for its action row *and* the countdown line,
+    // so the board never runs underneath either.
+    const bottomBar = this.complete
+      ? edge + control.lg + space.md + typeScale.caption + rhythm(view)
+      : whisperVisible
+        ? edge + control.md + rhythm(view)
+        : edge;
 
     const avail = Math.max(120, h - topBar - bottomBar);
     const size = Math.min(contentWidth(view), avail);
     const ox = (w - size) / 2;
     const oy = topBar + (avail - size) / 2;
+
+    // The card the sky is played on: a breath darker than the page, one
+    // hairline. Stars keep a margin from its edge (the projection's own
+    // padding), so the frame never crowds a corner star.
+    const pad = space.md;
+    this.boardGfx.clear();
+    this.boardGfx.fillStyle(color.void, 0.35);
+    this.boardGfx.fillRoundedRect(ox - pad, oy - pad, size + pad * 2, size + pad * 2, radius.card);
+    this.boardGfx.lineStyle(hairline, color.line, 0.9);
+    this.boardGfx.strokeRoundedRect(ox - pad, oy - pad, size + pad * 2, size + pad * 2, radius.card);
     // Never below a fingertip's radius, however tightly this constellation packs.
     this.hitR = clamp(MIN_TAP / 2, this.starGap * size * 0.6, 34);
 
@@ -383,6 +441,8 @@ export class Play extends Scene {
       this.overlay.fillStyle(color.void, alpha.veil);
       this.overlay.fillRect(0, 0, w, h);
     }
+    this.positionActionRow();
+
     // The card wraps its story to the viewport, so a resize has to rebuild it.
     this.storyCard?.show(view, false);
     if (this.revealName) {
@@ -480,7 +540,6 @@ export class Play extends Scene {
     // A finger lifted off the edge of the canvas never reports a `pointerup`,
     // and would otherwise leave a rubber band hanging from a star forever.
     this.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.cancelDrag, this);
-    this.input.keyboard?.on('keydown-ESC', () => leaveTo(this, 'MainMenu'));
   }
 
   private cancelDrag(): void {
@@ -817,13 +876,21 @@ export class Play extends Scene {
    *  Whispers
    * ---------------------------------------------------------------- */
 
+  /** "Whisper" when ready, "Whisper · 12s" while cooling; disabled either way it should be. */
   private updateWhisperButton(): void {
-    this.whisperPill.setLabel(`Whisper · ${this.whispersLeft}`);
-    this.whisperPill.setEnabled(this.whispersLeft > 0);
+    const remaining = this.whisperReadyAt - performance.now();
+    if (remaining > 0) {
+      this.whisperPill.setLabel(`Whisper · ${Math.ceil(remaining / 1000)}s`);
+      this.whisperPill.setEnabled(false);
+      return;
+    }
+    this.whisperReadyAt = 0;
+    this.whisperPill.setLabel('Whisper');
+    this.whisperPill.setEnabled(!this.complete);
   }
 
   private useWhisper(): void {
-    if (this.complete || this.whispersLeft <= 0) return;
+    if (this.busy() || this.whisperReadyAt > performance.now()) return;
 
     let hintKey: string | null = null;
     for (const key of this.solutionSet) {
@@ -832,6 +899,7 @@ export class Play extends Scene {
         break;
       }
     }
+    // Nothing left to reveal: don't spend a Whisper or start a cooldown on nothing.
     if (!hintKey) return;
 
     const [i, j] = hintKey.split('-').map(Number) as [number, number];
@@ -839,7 +907,8 @@ export class Play extends Scene {
     const b = this.byId.get(j);
     if (!a || !b) return;
 
-    this.whispersLeft--;
+    this.whispersSpent++;
+    this.whisperReadyAt = performance.now() + WHISPER_COOLDOWN_MS;
     this.updateWhisperButton();
 
     this.tweens.killTweensOf(this.hintGfx);
@@ -961,23 +1030,23 @@ export class Play extends Scene {
 
     this.submission = postComplete({
       timeMs: this.solveMs,
-      whispers: this.whispersUsed(),
+      whispers: this.whispersSpent,
       glitches: this.glitchHits,
     });
   }
 
-  private whispersUsed(): number {
-    return this.puzzle.params.maxWhispers - this.whispersLeft;
-  }
-
   /** Leave the story behind and go count the night. */
   private openResults(): void {
+    if (this.solvedResults) {
+      leaveTo(this, 'Results', this.solvedResults);
+      return;
+    }
     const data: ResultsData = {
       night: this.puzzle.night,
       constellationId: this.puzzle.constellationId,
       submission: this.submission ?? undefined,
       timeMs: this.solveMs,
-      whispers: this.whispersUsed(),
+      whispers: this.whispersSpent,
       glitches: this.glitchHits,
     };
     leaveTo(this, 'Results', data);
@@ -1147,8 +1216,6 @@ export class Play extends Scene {
       { height: control.lg, minWidth: 190, fontSize: typeScale.body },
       () => this.showStoryCard()
     );
-    read.setPosition(this.view.w / 2 + (control.md + space.sm) / 2, y);
-    read.container.setDepth(36);
     this.readPill = read;
 
     const names = new Pill(
@@ -1157,8 +1224,6 @@ export class Play extends Scene {
       { height: control.lg, minWidth: control.lg, paddingX: space.sm, icon: 'star' },
       () => this.toggleStarNames()
     );
-    names.setPosition(read.container.x - read.width / 2 - space.sm - names.width / 2, y);
-    names.container.setDepth(36);
     names.setActive(prefs.starNames);
     this.namesPill = names;
 
@@ -1182,11 +1247,11 @@ export class Play extends Scene {
       if (!pulsing) nudge.setAlpha(0.9);
       this.namesNudge = nudge;
     }
+    this.positionActionRow();
   }
 
   private toggleStarNames(): void {
     prefs.set({ starNames: !prefs.starNames });
-    showToast(prefs.starNames ? 'Star names on' : 'Star names off');
     this.namesPill?.setActive(prefs.starNames);
     this.hudNamesPill.setActive(prefs.starNames);
     this.namesNudge?.destroy();
@@ -1197,9 +1262,14 @@ export class Play extends Scene {
   private dropRevealActions(): void {
     this.readPill?.destroy();
     this.namesPill?.destroy();
+    this.afterStoryPill?.destroy();
+    this.countdownText?.destroy();
+    this.countdownText = null;
+    this.afterActions = false;
     this.namesNudge?.destroy();
     this.readPill = null;
     this.namesPill = null;
+    this.afterStoryPill = null;
     this.namesNudge = null;
   }
 
@@ -1210,6 +1280,131 @@ export class Play extends Scene {
     }
     this.revealName = null;
     this.revealMeaning = null;
+  }
+
+  /**
+   * Tonight, already finished: the sky opens *solved* — the figure lit and
+   * breathing, its name in the corner of the night — with quiet ways onward.
+   * The game never ends on a dead end; the sky is always there to look at.
+   */
+  private enterSolvedView(): void {
+    this.complete = true;
+    for (const edge of this.puzzle.solution) {
+      const a = this.byId.get(edge.from);
+      const b = this.byId.get(edge.to);
+      if (!a || !b) continue;
+      this.connected.add(connKey(edge.from, edge.to));
+      this.edges.push({ a, b, progress: 1 });
+    }
+    this.timerPill.setVisible(false);
+    this.whisperPill.setVisible(false);
+
+    this.connectionGfx.setDepth(30);
+    this.holoGfx = this.add.graphics().setDepth(29);
+    for (const sv of this.starViews) {
+      this.tweens.killTweensOf(sv.glow);
+      if (sv.data.isDecoy) sv.container.setAlpha(0.1);
+      else {
+        sv.container.setDepth(30);
+        sv.glow.setScale(texScale(0.72)).setAlpha(0.75);
+      }
+    }
+    const breathe = motion(this, {
+      targets: this,
+      glowPulse: 1,
+      duration: duration.breath,
+      yoyo: true,
+      repeat: -1,
+      ease: ease.inOut,
+      onUpdate: () => {
+        this.redrawConnections();
+        this.redrawHologram();
+      },
+    });
+    if (!breathe) {
+      this.glowPulse = 1;
+    }
+    this.redrawConnections();
+    this.redrawHologram();
+    this.refreshStarLabels();
+    this.showNameReveal();
+    this.showAfterActions();
+  }
+
+  /** Once the story has been read (or the night reopened): the ways onward. */
+  private showAfterActions(): void {
+    this.dropRevealActions();
+
+    // The next sky's countdown lives with the solved one — the reason to return.
+    const countdown = crispText(this, 0, 0, '', {
+      fontFamily: font.sans,
+      fontSize: `${typeScale.caption}px`,
+      color: ink.muted,
+    })
+      .setOrigin(0.5, 1)
+      .setDepth(36);
+    const tick = (): void => {
+      countdown.setText(untilNextSky(nightEndUtc(this.puzzle.night) - Date.now()));
+    };
+    tick();
+    const timer = this.time.addEvent({ delay: 1000, loop: true, callback: tick });
+    countdown.once(GameObjects.Events.DESTROY, () => timer.remove());
+    this.countdownText = countdown;
+
+    this.readPill = new Pill(this, 'Results  ›', { height: control.lg, minWidth: 150, fontSize: typeScale.body }, () =>
+      this.openResults()
+    );
+    this.namesPill = new Pill(
+      this,
+      'My Sky',
+      { height: control.lg, minWidth: 120, fontSize: typeScale.body, icon: 'sparkle' },
+      () => leaveTo(this, 'MySky', {})
+    );
+    this.afterStoryPill = new Pill(
+      this,
+      '',
+      { height: control.lg, minWidth: control.lg, paddingX: space.sm, icon: 'moon' },
+      () => this.showStoryCard()
+    );
+    this.namesNudge = null;
+    this.afterActions = true;
+    // The board cedes the bottom band to this row — reflow, then place it.
+    if (this.view.w > 0) this.layout(this.view);
+    this.positionActionRow();
+  }
+
+  /**
+   * One place puts the bottom row where it belongs, on build and on every
+   * resize — a row placed before the first layout has a 0×0 viewport to go by.
+   */
+  private positionActionRow(): void {
+    if (this.view.w === 0) return;
+    const y = this.view.h - margin(this.view) - control.lg / 2;
+
+    if (this.afterActions && this.readPill && this.namesPill && this.afterStoryPill) {
+      const row = [this.afterStoryPill, this.readPill, this.namesPill];
+      const total = row.reduce((sum, pill) => sum + pill.width, 0) + space.sm * (row.length - 1);
+      let x = this.view.w / 2 - total / 2;
+      for (const pill of row) {
+        pill.setPosition(x + pill.width / 2, y);
+        pill.container.setDepth(36);
+        x += pill.width + space.sm;
+      }
+      this.countdownText?.setPosition(this.view.w / 2, y - control.lg / 2 - space.md);
+      return;
+    }
+
+    // The pre-story row: star-names toggle + "Read the story".
+    if (this.readPill && this.namesPill) {
+      this.readPill.setPosition(this.view.w / 2 + (control.md + space.sm) / 2, y);
+      this.readPill.container.setDepth(36);
+      this.namesPill.setPosition(
+        this.readPill.container.x - this.readPill.width / 2 - space.sm - this.namesPill.width / 2,
+        y
+      );
+      this.namesPill.container.setDepth(36);
+      this.namesNudge?.setPosition(this.namesPill.container.x, y - control.lg / 2 - space.sm);
+    }
   }
 
   /**
@@ -1224,10 +1419,17 @@ export class Play extends Scene {
       name: this.puzzle.name,
       story: this.puzzle.story,
       narrationId: this.puzzle.constellationId,
-      buttonLabel: 'Continue  ›',
-      onButton: () => this.openResults(),
+      buttonLabel: 'Close',
+      onButton: () => this.closeStoryCard(),
     });
     this.storyCard.show(this.view, true);
+  }
+
+  /** Back to the solved sky, with the ways onward waiting. */
+  private closeStoryCard(): void {
+    this.storyCard?.destroy();
+    this.storyCard = null;
+    this.showAfterActions();
   }
 }
 

@@ -12,6 +12,21 @@
  * constellation's name or shape.
  */
 
+@font-face {
+  font-family: 'Fraunces';
+  src: url('/fonts/fraunces-latin-500-normal.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -87,20 +102,19 @@
   box-shadow: 0 0 18px rgba(120, 140, 255, 0.14);
 }
 
-.hook {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(0.95rem, 3.6vw, 1.15rem);
-  line-height: 1.45;
+.night {
+  font-family: Fraunces, Georgia, serif;
+  font-weight: 500;
+  font-size: clamp(2rem, 8vw, 2.6rem);
+  line-height: 1.1;
   color: #f5f3ff;
-  max-width: 22ch;
+  min-height: 1.1em; /* hold the line's space before the night number lands */
 }
 
-.night {
-  font-size: 0.85rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.date {
+  font-family: Inter, -apple-system, sans-serif;
+  font-size: 0.9rem;
   color: #a7b0da;
-  min-height: 1.2em; /* hold the line's space before the night number lands */
 }
 
 /*
@@ -116,19 +130,21 @@
   margin-top: 4px;
   min-height: 48px; /* a comfortable thumb, on the smallest phone */
   padding: 0 26px;
-  border: 1px solid rgba(255, 227, 163, 0.55);
+  border: 1px solid rgba(232, 207, 158, 0.55);
   border-radius: 24px;
-  background: linear-gradient(rgba(255, 227, 163, 0.1), rgba(255, 227, 163, 0.03)), #1a2048;
-  color: #ffe3a3;
+  background: linear-gradient(rgba(232, 207, 158, 0.1), rgba(232, 207, 158, 0.03)), #1a2048;
+  color: #e8cf9e;
+  font-family: Inter, -apple-system, sans-serif;
   font-size: 1.02rem;
-  font-weight: 600;
+  font-weight: 500;
+  min-width: 150px;
   letter-spacing: 0.01em;
   cursor: pointer;
   transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
 }
 
 .start:hover {
-  border-color: rgba(255, 227, 163, 0.85);
+  border-color: rgba(232, 207, 158, 0.85);
   background-color: #232a58;
 }
 
@@ -138,7 +154,7 @@
 }
 
 .start:focus-visible {
-  outline: 2px solid rgba(255, 227, 163, 0.85);
+  outline: 2px solid rgba(232, 207, 158, 0.85);
   outline-offset: 2px;
 }
 

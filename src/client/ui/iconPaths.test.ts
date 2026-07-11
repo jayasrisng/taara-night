@@ -17,7 +17,7 @@ function longestSegment(points: Pt[], closed: boolean): number {
 
 describe('iconPaths', () => {
   it('covers every name in the set', () => {
-    expect(ICON_NAMES).toHaveLength(8);
+    expect(ICON_NAMES).toHaveLength(10);
     for (const name of ICON_NAMES) expect(iconPaths(name).length).toBeGreaterThan(0);
   });
 

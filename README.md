@@ -17,13 +17,13 @@ Every night at dusk (6 PM Pacific), a new sky opens on the subreddit. Everyone g
 
 Then you go to sleep. Tomorrow there's a new sky.
 
-It's a bedtime ritual, not a grind: the ambience is wind and crickets synthesized in your browser, the stories can be read aloud to you, and nothing ever rushes you — unless you *choose* Hard mode, where a soft timer and a dozen decoy "Glitch" stars wait for the competitive.
+It's a bedtime ritual, not a grind: the ambience is wind and crickets synthesized in your browser, the stories can be read aloud to you, and the whole community plays one shared board. The calendar sets the texture of the night: Monday is gentle, Sunday is dense, and every run has a soft timer.
 
 ## How to play
 
-1. Open tonight's TaaraNight post and pick **Easy**, **Medium**, or **Hard**.
+1. Open tonight's TaaraNight post and tap **Play**.
 2. Drag star to star (one long stroke works too) to weave the constellation's threads. Wrong pairs shake gently; Glitches shimmer cold.
-3. Stuck? Spend a **Whisper** — a hint that lights one missing thread.
+3. Stuck? use a **Whisper** — a hint that lights one missing thread, then cools down before it can be used again.
 4. Reveal the figure, learn its name (turn on **star names** to learn each star's, too), and read its story.
 5. Keep your **Jwala** — streak, from the Telugu for *flame* — burning by coming back each night.
 
@@ -31,9 +31,9 @@ It's a bedtime ritual, not a grind: the ambience is wind and crickets synthesize
 
 Every constellation you reveal takes its true place in **My Sky** — a pannable, zoomable chart of the whole celestial sphere, drawn north-up like a real star atlas. Fill in all 88 and you've collected the entire sky — and along the way you've quietly learned to read the real one.
 
-Solved a good night? Share it — as a comment on the nightly post or as your own post — with a spoiler-safe card that shows your mode, Glitches, Whispers, and streak, but never the constellation's name or shape. Nobody's night gets ruined.
+Solved a good night? Share it with a spoiler-safe card that shows your time, Glitches, Whispers, and streak, but never the constellation's name or shape. Nobody's night gets ruined.
 
-There's one leaderboard per night, and it reads like the game feels: Hard above Medium above Easy, then fewest Glitches, fastest time, fewest Whispers. It resets at dusk. Streaks are the long game.
+There's one leaderboard per night: fastest time first, with quiet honesty tags for runs that used no Whispers or touched no Glitches. It resets at dusk. Streaks are the long game.
 
 ## Under the hood
 

@@ -206,12 +206,18 @@ describe('routes', () => {
  * the post was pinned to, not about tonight.
  */
 describe('POST /sharePost', () => {
-  beforeEach(() => {
+  // Pin the post to a fixed night so the card's night number and its game link
+  // are the same on every calendar day — otherwise the test rots the moment the
+  // wall clock rolls past the night it was written under.
+  const NIGHT = 10;
+
+  beforeEach(async () => {
     live.redis = createFakeRedis();
     live.username = 'ana';
     live.postId = 't3_abc';
     live.comments = [];
     live.posts = [];
+    await live.redis.set(keys.postNight('t3_abc'), String(NIGHT));
   });
 
   const solve = { timeMs: 42_000, whispers: 1, glitches: 2 };
@@ -225,7 +231,7 @@ describe('POST /sharePost', () => {
 
   it('submits the night as the player’s own post, spoiler-free, with a link', async () => {
     await post();
-    await live.redis.set('tn:night:10:post', 't3_night10');
+    await live.redis.set(keys.nightPost(NIGHT), 't3_night10');
     const body = await (await sharePost()).json();
 
     expect(body.alreadyShared).toBe(false);
@@ -235,7 +241,7 @@ describe('POST /sharePost', () => {
     expect(live.posts[0]?.text).not.toContain('Mode');
     expect(live.posts[0]?.text).toContain('1 Whisper used');
     expect(live.posts[0]?.text).toContain('reddit.com/r/taara_connect_dev/comments/night10');
-    const name = (await import('../../shared/puzzleEngine')).selectConstellationForNight(10).name;
+    const name = (await import('../../shared/puzzleEngine')).selectConstellationForNight(NIGHT).name;
     expect(live.posts[0]?.text).not.toContain(name);
   });
 
