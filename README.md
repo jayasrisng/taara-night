@@ -7,6 +7,8 @@
 
 ---
 
+![TaaraNight demo](media/taaranight-demo.gif)
+
 The logo above isn't stock art — it's a photograph I took of the night sky in Dover, Arkansas, one of the darkest corners of the state. Standing under that sky, I realized I could point at maybe two constellations with any confidence. Thousands of stars up there, and I knew almost none of their names.
 
 **Taara** (తార) means *star* in Telugu, my mother tongue. TaaraNight is my attempt to fix that — one night at a time, for anyone on Reddit.
