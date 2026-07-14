@@ -8,10 +8,11 @@
  */
 
 /**
- * Launch instant: 2026-07-01 01:00:00 UTC. This is the start of TaaraNight #1.
+ * Launch instant: 2026-07-15 01:00:00 UTC (July 14 at 6 PM PDT).
+ * This is the start of TaaraNight #1.
  * (Date.UTC month is 0-indexed, so 6 = July.)
  */
-export const LAUNCH_EPOCH_MS = Date.UTC(2026, 6, 1, 1, 0, 0, 0);
+export const LAUNCH_EPOCH_MS = Date.UTC(2026, 6, 15, 1, 0, 0, 0);
 
 /** One night is exactly 24 hours. */
 export const NIGHT_LENGTH_MS = 24 * 60 * 60 * 1000;

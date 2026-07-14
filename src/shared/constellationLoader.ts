@@ -89,6 +89,17 @@ function validateConstellation(constellation: Constellation): void {
   if (!constellation.story || typeof constellation.story !== 'string' || constellation.story.trim().length === 0) {
     throw new ConstellationValidationError(`Constellation ${constellation.id}: story must be a non-empty string`);
   }
+  const telugu = constellation.localized?.te;
+  if (
+    !telugu ||
+    !telugu.title.trim() ||
+    !telugu.story.trim() ||
+    !telugu.fact.trim()
+  ) {
+    throw new ConstellationValidationError(
+      `Constellation ${constellation.id}: Telugu title, story, and fact must all be non-empty`
+    );
+  }
 
   // Check stars
   if (!Array.isArray(constellation.stars) || constellation.stars.length === 0) {

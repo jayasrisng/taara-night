@@ -12,7 +12,7 @@
  * Monday → monster Sunday, resetting weekly. See WEEKDAY_RAMP.
  */
 
-import type { Constellation } from './constellations';
+import type { Constellation, LocalizedStory } from './constellations';
 import { CONSTELLATION_DATA } from './constellationData';
 import { weekdayOfNight } from './nightSeed';
 import { hashSeed, mulberry32, shuffleInPlace } from './rng';
@@ -135,6 +135,8 @@ export interface NightlyPuzzle {
   meaning: string;
   /** Bedtime story reward (spoiler — reveal only after completion). */
   story: string;
+  /** Approved Telugu reward copy, mapped to this same constellation. */
+  telugu: LocalizedStory;
   params: NightParams;
   /** Real stars + decoys, in a shuffled order. */
   stars: PuzzleStar[];
@@ -321,6 +323,7 @@ export function generatePuzzle(night: number): NightlyPuzzle {
     name: constellation.name,
     meaning: constellation.meaning,
     story: constellation.story,
+    telugu: constellation.localized.te,
     params,
     stars,
     solution,

@@ -15,8 +15,8 @@ import {
 } from './nightSeed';
 
 describe('LAUNCH_EPOCH_MS', () => {
-  it('is 2026-07-01 01:00:00 UTC', () => {
-    expect(new Date(LAUNCH_EPOCH_MS).toISOString()).toBe('2026-07-01T01:00:00.000Z');
+  it('is 2026-07-15 01:00:00 UTC', () => {
+    expect(new Date(LAUNCH_EPOCH_MS).toISOString()).toBe('2026-07-15T01:00:00.000Z');
   });
 });
 
@@ -37,13 +37,13 @@ describe('nightNumberAt', () => {
     expect(nightNumberAt(LAUNCH_EPOCH_MS + NIGHT_LENGTH_MS)).toBe(2);
   });
 
-  it('matches a hand-computed date (2026-07-08 after 01:00 UTC → night 8)', () => {
-    // 7 full nights elapsed since 2026-07-01 01:00 UTC.
-    expect(nightNumberAt(Date.UTC(2026, 6, 8, 12, 0, 0))).toBe(8);
-    // Just before the boundary on the 8th it is still night 7.
-    expect(nightNumberAt(Date.UTC(2026, 6, 8, 0, 59, 59))).toBe(7);
+  it('matches a hand-computed date (2026-07-22 after 01:00 UTC → night 8)', () => {
+    // 7 full nights elapsed since 2026-07-15 01:00 UTC.
+    expect(nightNumberAt(Date.UTC(2026, 6, 22, 12, 0, 0))).toBe(8);
+    // Just before the boundary on the 22nd it is still night 7.
+    expect(nightNumberAt(Date.UTC(2026, 6, 22, 0, 59, 59))).toBe(7);
     // At the boundary it becomes night 8.
-    expect(nightNumberAt(Date.UTC(2026, 6, 8, 1, 0, 0))).toBe(8);
+    expect(nightNumberAt(Date.UTC(2026, 6, 22, 1, 0, 0))).toBe(8);
   });
 
   it('is 0 or negative before launch (caller must clamp)', () => {
@@ -53,7 +53,7 @@ describe('nightNumberAt', () => {
   });
 
   it('accepts a Date as well as a millisecond number', () => {
-    const d = new Date(Date.UTC(2026, 6, 8, 12, 0, 0));
+    const d = new Date(Date.UTC(2026, 6, 22, 12, 0, 0));
     expect(nightNumberAt(d)).toBe(nightNumberAt(d.getTime()));
   });
 });
@@ -84,7 +84,7 @@ describe('nightStartUtc / nightEndUtc', () => {
 });
 
 describe('weekdayOfNight', () => {
-  // 0 = Sun … 6 = Sat. Launch night 1 begins 2026-07-01 01:00 UTC (a Wednesday).
+  // 0 = Sun … 6 = Sat. Launch night 1 begins 2026-07-15 01:00 UTC (a Wednesday).
   const SUN = 0;
   const MON = 1;
   const TUE = 2;
@@ -100,12 +100,12 @@ describe('weekdayOfNight', () => {
   });
 
   it('matches the launch-week calendar (night 1 = Wed, night 6 = Mon)', () => {
-    expect(weekdayOfNight(1)).toBe(WED); // 2026-07-01
-    expect(weekdayOfNight(4)).toBe(SAT); // 2026-07-04
-    expect(weekdayOfNight(5)).toBe(SUN); // 2026-07-05
-    expect(weekdayOfNight(6)).toBe(MON); // 2026-07-06
-    expect(weekdayOfNight(7)).toBe(TUE); // 2026-07-07
-    expect(weekdayOfNight(8)).toBe(WED); // 2026-07-08
+    expect(weekdayOfNight(1)).toBe(WED); // 2026-07-15
+    expect(weekdayOfNight(4)).toBe(SAT); // 2026-07-18
+    expect(weekdayOfNight(5)).toBe(SUN); // 2026-07-19
+    expect(weekdayOfNight(6)).toBe(MON); // 2026-07-20
+    expect(weekdayOfNight(7)).toBe(TUE); // 2026-07-21
+    expect(weekdayOfNight(8)).toBe(WED); // 2026-07-22
   });
 
   it('repeats every 7 nights (week wraparound)', () => {

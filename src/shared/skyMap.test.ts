@@ -7,6 +7,7 @@ import {
   fieldStars,
   nearestStar,
   projectSky,
+  projectSkyNear,
   xForRa,
   yForDec,
   type MapPoint,
@@ -51,6 +52,14 @@ describe('projectSky', () => {
 
   it('is deterministic', () => {
     expect(projectSky({ ra: 13.7923, dec: 49.3133 })).toEqual(projectSky({ ra: 13.7923, dec: 49.3133 }));
+  });
+
+  it('unwraps Pisces artwork anchors beside Pisces instead of across the 0h seam', () => {
+    const pisces = SKY_FIGURES.find((figure) => figure.id === 'pisces')!;
+    const westOfMidnight = projectSkyNear({ ra: 23.7, dec: 3 }, pisces.centre.x);
+    const eastOfMidnight = projectSkyNear({ ra: 0.3, dec: 3 }, pisces.centre.x);
+    expect(Math.abs(westOfMidnight.x - eastOfMidnight.x)).toBeLessThan(0.2);
+    expect(Math.abs(westOfMidnight.x - pisces.centre.x)).toBeLessThan(2);
   });
 
   // North up, east left — everywhere, which is the whole point of the chart.

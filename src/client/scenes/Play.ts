@@ -14,6 +14,7 @@
 import { Scene, GameObjects } from 'phaser';
 import * as Phaser from 'phaser';
 import { getConstellationById } from '../../shared/constellationLoader';
+import { projectIntoBox } from '../../shared/projection';
 import { generatePuzzle, type NightlyPuzzle, type PuzzleStar } from '../../shared/puzzleEngine';
 import { nightEndUtc, nightNumberAt } from '../../shared/nightSeed';
 import { mulberry32 } from '../../shared/rng';
@@ -32,6 +33,12 @@ import { prefs } from '../ui/prefs';
 import { StoryCard } from '../ui/StoryCard';
 import { alpha, color, control, font, glow, hairline, hex, ink, radius, space, typeScale } from '../ui/theme';
 import { TEX } from '../ui/textures';
+import {
+  constellationArtFile,
+  constellationArtFrame,
+  constellationArtKey,
+  fitConstellationArt,
+} from '../ui/constellationArt';
 import { postComplete } from '../api';
 import type { CompleteResponse } from '../../shared/api';
 import type { ResultsData } from './Results';
@@ -109,6 +116,11 @@ export class Play extends Scene {
   private hintGfx!: GameObjects.Graphics;
   private rubberGfx!: GameObjects.Graphics;
   private overlay: GameObjects.Graphics | null = null;
+  /** The illustrated figure rests below the real stars and connection lines. */
+  private spiritArt: GameObjects.Image | null = null;
+  private spiritAura: GameObjects.Image | null = null;
+  private artReady = false;
+  private board = { x: 0, y: 0, size: 1 };
 
   // HUD.
   private titleText!: GameObjects.Text;
@@ -179,6 +191,9 @@ export class Play extends Scene {
     this.edges = [];
     this.overlay = null;
     this.holoGfx = null;
+    this.spiritArt = null;
+    this.spiritAura = null;
+    this.artReady = false;
     this.storyCard = null;
     this.readPill = null;
     this.namesPill = null;
@@ -203,6 +218,7 @@ export class Play extends Scene {
 
   create(): void {
     this.puzzle = generatePuzzle(this.night);
+    this.queueConstellationArt();
     // Not `this.time.now`: the scene Clock has not ticked when `create` runs, so
     // it still reads 0 and the timer would count from page load, not from now.
     this.startTime = performance.now();
@@ -212,7 +228,9 @@ export class Play extends Scene {
     }
     this.starGap = closestPair(this.puzzle.stars);
 
-    this.sky = new NightSky(this, this.night);
+    // Puzzle nodes must be the only stars on screen; decorative stars read as
+    // tappable decoys and compete with intentional Glitches.
+    this.sky = new NightSky(this, this.night, { stars: false, shootingStars: false });
 
     this.boardGfx = this.add.graphics();
     this.outlineGfx = this.add.graphics();
@@ -266,12 +284,21 @@ export class Play extends Scene {
 
   private createStars(): void {
     this.puzzle.stars.forEach((data) => {
+      // A deterministic brightness spread gives the field the visual hierarchy
+      // of a real sky while preserving identical puzzles for every player.
+      const luminance = ((data.id * 37 + this.puzzle.night * 13) % 100) / 100;
+      const starPalette = [0xffffff, 0xd9e9ff, 0xffedcb, 0xc7dcff];
+      const starTint = starPalette[(data.id * 17 + this.puzzle.night) % starPalette.length]!;
       const glow = this.add
         .image(0, 0, TEX.starSoft)
-        .setScale(texScale(0.42))
-        .setTint(color.starGlow)
-        .setAlpha(0.55);
-      const core = this.add.image(0, 0, TEX.starSoft).setScale(texScale(0.18)).setTint(color.starCore);
+        .setScale(texScale(0.44 + luminance * 0.28))
+        .setTint(starTint)
+        .setAlpha(0.68 + luminance * 0.22);
+      const core = this.add
+        .image(0, 0, TEX.starSoft)
+        .setScale(texScale(0.17 + luminance * 0.13))
+        .setTint(starTint)
+        .setAlpha(0.96);
       const container = this.add.container(0, 0, [glow, core]);
       const view: StarView = { data, container, glow, core };
       this.starViews.push(view);
@@ -280,8 +307,8 @@ export class Play extends Scene {
       // Each star breathes at its own tempo, so the field never pulses in unison.
       motion(this, {
         targets: glow,
-        scale: texScale(0.5),
-        alpha: 0.35,
+        scale: texScale(0.51 + luminance * 0.31),
+        alpha: 0.56 + luminance * 0.16,
         duration: duration.breath * (1 + (data.id % 6) * 0.14),
         yoyo: true,
         repeat: -1,
@@ -414,13 +441,14 @@ export class Play extends Scene {
     const size = Math.min(contentWidth(view), avail);
     const ox = (w - size) / 2;
     const oy = topBar + (avail - size) / 2;
+    this.board = { x: ox, y: oy, size };
 
     // The card the sky is played on: a breath darker than the page, one
     // hairline. Stars keep a margin from its edge (the projection's own
     // padding), so the frame never crowds a corner star.
     const pad = space.md;
     this.boardGfx.clear();
-    this.boardGfx.fillStyle(color.void, 0.35);
+    this.boardGfx.fillStyle(color.void, 0.18);
     this.boardGfx.fillRoundedRect(ox - pad, oy - pad, size + pad * 2, size + pad * 2, radius.card);
     this.boardGfx.lineStyle(hairline, color.line, 0.9);
     this.boardGfx.strokeRoundedRect(ox - pad, oy - pad, size + pad * 2, size + pad * 2, radius.card);
@@ -432,6 +460,7 @@ export class Play extends Scene {
     }
     if (this.starLabels.length > 0) this.refreshStarLabels();
     this.redrawHologram();
+    this.layoutConstellationArt();
 
     this.redrawOutline();
     this.redrawConnections();
@@ -514,9 +543,9 @@ export class Play extends Scene {
       const ay = e.a.container.y;
       const ex = ax + (e.b.container.x - ax) * e.progress;
       const ey = ay + (e.b.container.y - ay) * e.progress;
-      this.connectionGfx.lineStyle(this.complete ? 15 : 11, color.accentGlow, 0.1 + 0.22 * pulse);
+      this.connectionGfx.lineStyle(this.complete ? 12 : 9, color.accentGlow, 0.14 + 0.24 * pulse);
       this.connectionGfx.lineBetween(ax, ay, ex, ey);
-      this.connectionGfx.lineStyle(3, color.accentBright, 0.95);
+      this.connectionGfx.lineStyle(2.25, color.accentBright, 1);
       this.connectionGfx.lineBetween(ax, ay, ex, ey);
     }
   }
@@ -969,6 +998,7 @@ export class Play extends Scene {
     this.connectionGfx.setDepth(30);
     this.holoGfx = this.add.graphics().setDepth(29);
     this.redrawHologram();
+    this.showConstellationArt(true);
     for (const sv of this.starViews) {
       // Each halo has been twinkling on an endless tween since `createStars`.
       // Left running it would take `alpha` straight back off the reveal below.
@@ -1301,6 +1331,7 @@ export class Play extends Scene {
 
     this.connectionGfx.setDepth(30);
     this.holoGfx = this.add.graphics().setDepth(29);
+    this.showConstellationArt(false);
     for (const sv of this.starViews) {
       this.tweens.killTweensOf(sv.glow);
       if (sv.data.isDecoy) sv.container.setAlpha(0.1);
@@ -1331,6 +1362,113 @@ export class Play extends Scene {
     this.showAfterActions();
   }
 
+  /** Load only tonight's full-resolution figure; the game remains playable while it arrives. */
+  private queueConstellationArt(): void {
+    const key = constellationArtKey(this.puzzle.constellationId);
+    if (this.textures.exists(key)) {
+      this.artReady = true;
+      return;
+    }
+    this.load.image(key, constellationArtFile(this.puzzle.constellationId));
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      if (!this.scene.isActive()) return;
+      this.artReady = this.textures.exists(key);
+      if (this.complete) this.showConstellationArt(true);
+    });
+    this.load.start();
+  }
+
+  /** Materialize the mythological figure behind the catalogue-true star pattern. */
+  private showConstellationArt(animate: boolean): void {
+    if (!this.artReady || this.spiritArt) return;
+    const key = constellationArtKey(this.puzzle.constellationId);
+    if (!this.textures.exists(key)) return;
+
+    this.spiritAura = this.add
+      .image(0, 0, key)
+      .setDepth(27)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(0x4b79aa)
+      .setAlpha(0);
+    this.spiritArt = this.add
+      .image(0, 0, key)
+      .setDepth(28)
+      .setBlendMode(Phaser.BlendModes.SCREEN)
+      .setAlpha(animate ? 0 : 0.74);
+    if (this.puzzle.constellationId !== 'taurus' && this.puzzle.constellationId !== 'serpens') {
+      this.spiritArt.setTint(0xc6dcf2);
+    }
+    this.layoutConstellationArt();
+
+    if (animate) {
+      const artScaleX = this.spiritArt.scaleX;
+      const artScaleY = this.spiritArt.scaleY;
+      const auraScaleX = this.spiritAura.scaleX;
+      const auraScaleY = this.spiritAura.scaleY;
+      this.spiritArt.setScale(artScaleX * 0.94, artScaleY * 0.94);
+      this.spiritAura.setScale(auraScaleX * 0.91, auraScaleY * 0.91);
+      tween(this, {
+        targets: this.spiritArt,
+        alpha: 0.8,
+        scaleX: artScaleX,
+        scaleY: artScaleY,
+        duration: duration.reveal * 1.35,
+        ease: ease.out,
+        onComplete: () => {
+          const breathing = motion(this, {
+            targets: this.spiritArt!,
+            alpha: 0.64,
+            duration: duration.breath * 1.25,
+            yoyo: true,
+            repeat: -1,
+            ease: ease.inOut,
+          });
+          if (!breathing) this.spiritArt?.setAlpha(0.74);
+        },
+      });
+      tween(this, {
+        targets: this.spiritAura,
+        alpha: 0.26,
+        scaleX: auraScaleX,
+        scaleY: auraScaleY,
+        duration: duration.reveal * 1.7,
+        ease: ease.out,
+      });
+    } else {
+      this.spiritAura.setAlpha(0.21);
+      const breathing = motion(this, {
+        targets: this.spiritArt,
+        alpha: 0.62,
+        duration: duration.breath * 1.25,
+        yoyo: true,
+        repeat: -1,
+        ease: ease.inOut,
+      });
+      if (!breathing) this.spiritArt.setAlpha(0.74);
+    }
+  }
+
+  private layoutConstellationArt(): void {
+    if (!this.spiritArt || !this.spiritAura) return;
+    const { x, y, size } = this.board;
+    const constellation = getConstellationById(this.puzzle.constellationId);
+    const frame = constellationArtFrame(this.puzzle.constellationId, 'full');
+    if (!constellation || !frame) return;
+    const anchors = projectIntoBox(constellation.stars, frame.anchors).map((point) => ({
+      x: x + point.x * size,
+      y: y + point.y * size,
+    }));
+    const transform = fitConstellationArt(frame, anchors);
+    if (!transform) return;
+    for (const image of [this.spiritAura, this.spiritArt]) {
+      image
+        .setPosition(transform.x, transform.y)
+        .setRotation(transform.rotation)
+        .setScale(transform.scaleX, transform.scaleY);
+    }
+    this.spiritAura.setScale(transform.scaleX * 1.025, transform.scaleY * 1.025);
+  }
+
   /** Once the story has been read (or the night reopened): the ways onward. */
   private showAfterActions(): void {
     this.dropRevealActions();
@@ -1358,7 +1496,10 @@ export class Play extends Scene {
       this,
       'My Sky',
       { height: control.lg, minWidth: 120, fontSize: typeScale.body, icon: 'sparkle' },
-      () => leaveTo(this, 'MySky', {})
+      () =>
+        leaveTo(this, 'MySky', {
+          tonight: { constellationId: this.puzzle.constellationId, night: this.puzzle.night },
+        })
     );
     this.afterStoryPill = new Pill(
       this,
@@ -1418,7 +1559,7 @@ export class Play extends Scene {
     this.storyCard = new StoryCard(this, {
       name: this.puzzle.name,
       story: this.puzzle.story,
-      narrationId: this.puzzle.constellationId,
+      telugu: this.puzzle.telugu,
       buttonLabel: 'Close',
       onButton: () => this.closeStoryCard(),
     });

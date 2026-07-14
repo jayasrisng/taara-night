@@ -12,7 +12,7 @@ npm run test
 npm run build
 ```
 
-Expected result: all commands exit successfully. The current automated suite should report 301 passing tests. Node 20 fails before Vitest starts because the test runner expects newer `node:util` exports.
+Expected result: all commands exit successfully. The current automated suite should report 287 passing tests. Node 20 fails before Vitest starts because the test runner expects newer `node:util` exports.
 
 ## Dev Reddit playtest
 
@@ -32,7 +32,7 @@ Verify:
 - Tap/drag real star connections; wrong pairs shake.
 - Whispers are unlimited but show a 20-second cooldown.
 - Finish the puzzle and confirm the constellation reveal appears before the story.
-- Open/read the story and test read-aloud.
+- Open and read the story; confirm no narration auto-plays.
 - Results show time, Jwala, next-sky countdown, and Stargazers.
 - Comment share posts a spoiler-safe comment.
 - Copy share puts the spoiler-safe card plus post URL on the clipboard.

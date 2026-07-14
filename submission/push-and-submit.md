@@ -9,7 +9,7 @@ cd /Users/jayasrisainikithaguthula/Documents/GitHub/taara-reddit/taara-connect
 git status --short
 ```
 
-Expected: only intentional app changes, public fonts/narration assets, and deleted `src/client/scenes/MainMenu.ts`.
+Expected: only intentional app changes, public font/art assets, and deleted `src/client/scenes/MainMenu.ts`.
 
 ## 2. Run gates
 

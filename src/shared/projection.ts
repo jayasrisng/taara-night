@@ -95,9 +95,24 @@ export function skyCentroid(coords: readonly SkyCoord[]): SkyCoord {
  * side. Pure and deterministic.
  */
 export function projectToBox(coords: readonly SkyCoord[], padding = DEFAULT_PADDING): BoxPoint[] {
-  if (coords.length === 0) return [];
+  return projectIntoBox(coords, coords, padding);
+}
 
-  const stars = coords.map(unitVector);
+/**
+ * Project extra sky coordinates through the exact frame established by a
+ * constellation's catalogue stars. This is how historical artwork anchors are
+ * registered to the same box as the playable figure without changing its
+ * centre, scale, or orientation.
+ */
+export function projectIntoBox(
+  reference: readonly SkyCoord[],
+  coords: readonly SkyCoord[],
+  padding = DEFAULT_PADDING
+): BoxPoint[] {
+  if (reference.length === 0 || coords.length === 0) return [];
+
+  const stars = reference.map(unitVector);
+  const targets = coords.map(unitVector);
   const centre = normalize(
     stars.reduce<Vec3>((acc, u) => [acc[0] + u[0], acc[1] + u[1], acc[2] + u[2]], [0, 0, 0])
   );
@@ -118,6 +133,10 @@ export function projectToBox(coords: readonly SkyCoord[], padding = DEFAULT_PADD
 
   // Screen axes: x grows west (east is left), y grows south (north is up).
   const raw = plane.map((p) => ({ x: -p.east, y: -p.north }));
+  const targetRaw = targets.map((u) => {
+    const along = dot(u, centre);
+    return { x: -dot(u, east) / along, y: -dot(u, north) / along };
+  });
 
   const xs = raw.map((p) => p.x);
   const ys = raw.map((p) => p.y);
@@ -133,7 +152,7 @@ export function projectToBox(coords: readonly SkyCoord[], padding = DEFAULT_PADD
   const cx = (minX + maxX) / 2;
   const cy = (minY + maxY) / 2;
 
-  return raw.map((p) => ({
+  return targetRaw.map((p) => ({
     x: round4(0.5 + (p.x - cx) * scale),
     y: round4(0.5 + (p.y - cy) * scale),
   }));

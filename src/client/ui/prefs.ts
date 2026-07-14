@@ -26,6 +26,8 @@ export interface PrefsState {
   onboarded: boolean;
   /** Label the real stars with their designations, where it cannot spoil. */
   starNames: boolean;
+  /** The reader's last selected story language. */
+  storyLanguage: 'en' | 'te';
 }
 
 export interface PrefStorage {
@@ -37,7 +39,13 @@ const FLAGS = ['sound', 'reducedMotion', 'onboarded', 'starNames'] as const;
 
 /** Sound on, motion as the operating system asks, hints not yet seen. */
 export function defaultPrefs(systemReducedMotion: boolean): PrefsState {
-  return { sound: true, reducedMotion: systemReducedMotion, onboarded: false, starNames: false };
+  return {
+    sound: true,
+    reducedMotion: systemReducedMotion,
+    onboarded: false,
+    starNames: false,
+    storyLanguage: 'en',
+  };
 }
 
 /** Read whatever of a stored blob still looks like a preference. */
@@ -56,6 +64,9 @@ function parse(raw: string | null): Partial<PrefsState> {
   const out: Partial<PrefsState> = {};
   for (const flag of FLAGS) {
     if (typeof record[flag] === 'boolean') out[flag] = record[flag];
+  }
+  if (record.storyLanguage === 'en' || record.storyLanguage === 'te') {
+    out.storyLanguage = record.storyLanguage;
   }
   return out;
 }
@@ -90,6 +101,10 @@ export class Prefs {
 
   get starNames(): boolean {
     return this.state.starNames;
+  }
+
+  get storyLanguage(): 'en' | 'te' {
+    return this.state.storyLanguage;
   }
 
   /** True when the scene may move things around. Fades are always allowed. */

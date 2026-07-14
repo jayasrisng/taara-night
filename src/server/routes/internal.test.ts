@@ -68,7 +68,7 @@ describe('internal routes', () => {
     // Pin the clock away from the 01:00 UTC boundary, so `currentNight` and
     // `scheduledNight` agree and the cron-vs-menu tests cannot flake once a day.
     vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-07-10T12:00:00Z'));
+    vi.setSystemTime(new Date('2026-07-22T12:00:00Z'));
   });
 
   afterEach(() => {

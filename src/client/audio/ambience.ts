@@ -13,8 +13,7 @@
  * Every method is safe to call before that, and on a browser with no Web Audio
  * at all: the game simply stays quiet.
  *
- * The graph is `sources → master (the mute toggle) → duck (the read-aloud voice
- * steps in front of the night) → destination`.
+ * The graph is `sources → master (the mute toggle) → destination`.
  *
  * Volumes are deliberately low. This is meant to sit under a bedtime, not to be
  * noticed.
@@ -35,10 +34,6 @@ const CHIME_GAIN = 0.045;
 const REVEAL_GAIN = 0.08;
 
 const FADE_S = 0.6;
-/** How far the night stands back while a story is read aloud. */
-const DUCK_GAIN = 0.25;
-const DUCK_S = 0.35;
-
 const WIND_SEED = 0x7aa2;
 const HISS_SEED = 0x51e9;
 const CRICKET_SEED = 0x2c17;
@@ -112,10 +107,8 @@ function noiseLoop(ctx: BaseAudioContext, seconds: number, seed: number, brown: 
 export class Ambience {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
-  private duckGain: GainNode | null = null;
   private white: AudioBuffer | null = null;
   private enabled: boolean;
-  private ducked = false;
 
   constructor(enabled: boolean) {
     this.enabled = enabled;
@@ -141,16 +134,6 @@ export class Ambience {
     } else {
       this.fade(this.master, 0, FADE_S);
     }
-  }
-
-  /**
-   * Stand the night back while something else speaks over it — the story being
-   * read aloud. Muting is a preference; this is a courtesy, and it is undone.
-   */
-  duck(on: boolean): void {
-    if (this.ducked === on) return;
-    this.ducked = on;
-    this.fade(this.duckGain, on ? DUCK_GAIN : 1, DUCK_S);
   }
 
   /**
@@ -226,13 +209,9 @@ export class Ambience {
     const ctx = new AudioContext();
     this.ctx = ctx;
 
-    this.duckGain = ctx.createGain();
-    this.duckGain.gain.value = this.ducked ? DUCK_GAIN : 1;
-    this.duckGain.connect(ctx.destination);
-
     this.master = ctx.createGain();
     this.master.gain.value = this.enabled ? 1 : 0;
-    this.master.connect(this.duckGain);
+    this.master.connect(ctx.destination);
 
     this.white = noiseLoop(ctx, 2, HISS_SEED, false);
 

@@ -9,17 +9,14 @@
  * margins, so the reward is never cropped on a short screen. `show` rebuilds the
  * card, which is also how a resize is handled — the text has to re-wrap.
  *
- * Where the browser has a voice, the card offers to read the story aloud, and
- * the night stands back while it does.
+ * Stories are intentionally read by the player. Taara does not auto-play or
+ * synthesize narration, so the quiet ending remains quiet on every device.
  */
 
-import * as Phaser from 'phaser';
 import { Scene, GameObjects } from 'phaser';
-import { ambience } from '../audio/ambience';
-import { narration } from '../audio/narration';
+import type { LocalizedStory } from '../../shared/constellations';
 import { crispText } from './display';
 import { clamp, gutter, margin, type Viewport } from './frame';
-import type { IconName } from './icons';
 import { duration, ease, tween } from './motion';
 import { Pill } from './Pill';
 import { prefs } from './prefs';
@@ -32,28 +29,27 @@ export interface StoryCardOptions {
   /** The constellation's name — safe to show, since the story is the reward for revealing it. */
   name: string;
   story: string;
+  /** Approved Telugu copy for this same constellation. */
+  telugu?: LocalizedStory;
   buttonLabel: string;
   onButton: () => void;
   /** A quiet line under the story, e.g. the night it was revealed. */
   note?: string;
   depth?: number;
-  /** Constellation id, for the shipped narration recording. */
-  narrationId?: string;
 }
 
 export class StoryCard {
   private scene: Scene;
   private options: StoryCardOptions;
   private card: GameObjects.Container | null = null;
-  private readPill: Pill | null = null;
+  private language: 'en' | 'te';
   /** True from the moment the card starts leaving, so its buttons go quiet. */
   private hiding = false;
 
   constructor(scene: Scene, options: StoryCardOptions) {
     this.scene = scene;
     this.options = options;
-    // Leaving the scene must not leave a voice reading to an empty room.
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
+    this.language = options.telugu ? prefs.storyLanguage : 'en';
   }
 
   /**
@@ -64,10 +60,12 @@ export class StoryCard {
     if (this.hiding) return;
 
     const { w, h } = view;
-    const { name, story, note, buttonLabel, onButton, depth = 40 } = this.options;
+    const { name, story, telugu, note, buttonLabel, onButton, depth = 40 } = this.options;
+    const showingTelugu = this.language === 'te' && telugu !== undefined;
+    const displayName = showingTelugu ? telugu.title : name;
+    const displayStory = showingTelugu ? `${telugu.story}\n\n✦\n${telugu.fact}` : story;
 
     this.card?.destroy();
-    this.readPill = null;
 
     const maxH = h - margin(view) * 2;
     const cardW = Math.min(w - gutter(view) * 2, 560);
@@ -78,12 +76,11 @@ export class StoryCard {
     const padTop = space.xl;
     const gap = space.lg;
     const noteGap = space.md;
-    const readGap = space.md;
     const btnGap = space.xl;
     const padBottom = space.xl;
 
-    const title = crispText(this.scene, 0, 0, name, {
-      fontFamily: font.serif,
+    const title = crispText(this.scene, 0, 0, displayName, {
+      fontFamily: showingTelugu ? font.telugu : font.serif,
       fontSize: `${clamp(typeScale.title, w * 0.075, typeScale.display)}px`,
       color: ink.accent,
       align: 'center',
@@ -92,12 +89,12 @@ export class StoryCard {
     }).setOrigin(0.5);
     title.setShadow(0, 0, hex(color.accentGlow), glow.soft, true, true);
 
-    const body = crispText(this.scene, 0, 0, story, {
-      fontFamily: font.serif,
+    const body = crispText(this.scene, 0, 0, displayStory, {
+      fontFamily: showingTelugu ? font.telugu : font.serif,
       fontSize: `${typeScale.lead}px`,
       color: ink.bright,
       align: 'center',
-      lineSpacing: 7,
+      lineSpacing: showingTelugu ? 3 : 7,
       wordWrap: { width: wrap },
     }).setOrigin(0.5);
 
@@ -111,19 +108,25 @@ export class StoryCard {
       : null;
 
     const button = new Pill(this.scene, buttonLabel, { minWidth: 200 }, onButton);
-
-    // Offered only where the browser has a voice to offer it with.
-    const read = narration.available()
-      ? new Pill(this.scene, this.readLabel(), { minWidth: 200, icon: this.readIcon() }, () => this.toggleRead())
+    const language = telugu
+      ? new Pill(
+          this.scene,
+          showingTelugu ? 'English' : 'తెలుగు',
+          { height: control.sm, minWidth: 88, fontSize: typeScale.caption, paddingX: space.md },
+          () => {
+            this.language = showingTelugu ? 'en' : 'te';
+            prefs.set({ storyLanguage: this.language });
+            this.show(view, false);
+          }
+        )
       : null;
-    this.readPill = read;
+    language?.setActive(showingTelugu);
 
     const noteBlock = footnote ? noteGap + footnote.height : 0;
-    const readBlock = read ? readGap + control.md : 0;
     const cardHeight = (): number =>
-      padTop + title.height + gap + body.height + noteBlock + readBlock + btnGap + control.md + padBottom;
+      padTop + title.height + gap + body.height + noteBlock + btnGap + control.md + padBottom;
 
-    let size = w < NARROW_W ? typeScale.body : typeScale.lead;
+    let size = showingTelugu || w < NARROW_W ? typeScale.body : typeScale.lead;
     body.setFontSize(size);
     while (cardHeight() > maxH && size > typeScale.micro) {
       body.setFontSize(--size);
@@ -137,10 +140,18 @@ export class StoryCard {
     footnote?.setY(body.y + body.height / 2 + noteGap + footnote.height / 2);
 
     const above = footnote ?? body;
-    const readY = above.y + above.height / 2 + readGap + control.md / 2;
-    read?.setPosition(0, readY);
-    const buttonTop = read ? readY + control.md / 2 : above.y + above.height / 2;
-    button.container.setY(buttonTop + btnGap + control.md / 2);
+    const buttonTop = above.y + above.height / 2;
+    const footerY = buttonTop + btnGap + control.md / 2;
+    if (language) {
+      const footerGap = space.sm;
+      const languageW = 88;
+      const closeW = 200;
+      const footerW = languageW + footerGap + closeW;
+      language.setPosition(-footerW / 2 + languageW / 2, footerY);
+      button.container.setPosition(footerW / 2 - closeW / 2, footerY);
+    } else {
+      button.container.setY(footerY);
+    }
 
     const bg = this.scene.add.graphics();
     bg.fillStyle(color.card, alpha.card);
@@ -148,9 +159,10 @@ export class StoryCard {
     bg.lineStyle(hairline, color.accentGlow, alpha.border);
     bg.strokeRoundedRect(-cardW / 2, top, cardW, cardH, radius.modal);
 
-    const parts: GameObjects.GameObject[] = [bg, title, body];
+    const parts: GameObjects.GameObject[] = [bg];
+    if (language) parts.push(language.container);
+    parts.push(title, body);
     if (footnote) parts.push(footnote);
-    if (read) parts.push(read.container);
     parts.push(button.container);
 
     const card = this.scene.add.container(w / 2, h / 2, parts).setDepth(depth);
@@ -178,8 +190,6 @@ export class StoryCard {
     const card = this.card;
     if (this.hiding || !card) return;
     this.hiding = true;
-    narration.stop();
-
     tween(this.scene, {
       targets: card,
       alpha: 0,
@@ -195,45 +205,7 @@ export class StoryCard {
 
   /** Idempotent: the scene's own shutdown calls it too. */
   destroy(): void {
-    // Dropped before the voice stops, because stopping runs the callback that
-    // would otherwise put a label on a pill this line is about to destroy.
-    this.readPill = null;
-    narration.stop();
     this.card?.destroy();
     this.card = null;
-  }
-
-  /**
-   * A deliberate tap, so it speaks even when the ambient sky is muted — the
-   * player asked for a voice, not for sound in general. The night ducks under it
-   * and comes back when the last sentence lands or the player interrupts.
-   */
-  private toggleRead(): void {
-    if (this.hiding) return;
-    if (narration.speaking) {
-      narration.stop();
-      return;
-    }
-
-    ambience.duck(true);
-    narration.read(this.options.narrationId ?? null, this.options.story, () => {
-      ambience.duck(false);
-      this.refreshReadPill();
-    });
-    this.refreshReadPill();
-  }
-
-  private refreshReadPill(): void {
-    this.readPill?.setIcon(this.readIcon()).setLabel(this.readLabel());
-  }
-
-  /** Reads the narrator, not a flag, so a rebuilt card knows it is mid-story. */
-  private readLabel(): string {
-    return narration.speaking ? 'Stop reading' : 'Read aloud';
-  }
-
-  /** A crossed-out speaker while it speaks: tapping it is what silences the voice. */
-  private readIcon(): IconName {
-    return narration.speaking ? 'mute' : 'sound';
   }
 }

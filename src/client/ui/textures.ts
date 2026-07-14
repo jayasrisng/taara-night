@@ -44,6 +44,19 @@ function ensureRadial(scene: Scene, key: string, size: number, color: number, fa
     g.fillStyle(color, (alpha * 0.16) / DPR);
     g.fillCircle(c, c, radius);
   }
+  if (key === TEX.starSoft) {
+    // Real bright stars read as a hot core with restrained diffraction, not as
+    // identical blurred dots. These rays are deliberately faint: scaling and
+    // tinting this shared texture keeps them elegant on small mobile screens.
+    g.lineStyle(Math.max(1, DPR * 0.62), 0xffffff, 0.28);
+    g.lineBetween(c, c * 0.12, c, c * 1.88);
+    g.lineBetween(c * 0.12, c, c * 1.88, c);
+    g.lineStyle(Math.max(1, DPR * 0.44), 0xffffff, 0.13);
+    g.lineBetween(c * 0.35, c * 0.35, c * 1.65, c * 1.65);
+    g.lineBetween(c * 1.65, c * 0.35, c * 0.35, c * 1.65);
+    g.fillStyle(0xffffff, 0.95);
+    g.fillCircle(c, c, Math.max(1.4, DPR));
+  }
   g.generateTexture(key, pixels, pixels);
   g.destroy();
 }

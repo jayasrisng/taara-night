@@ -160,7 +160,7 @@ export class Results extends Scene {
   }
 
   create(): void {
-    this.sky = new NightSky(this, this.params.night);
+    this.sky = new NightSky(this, this.params.night, { stars: false, shootingStars: false });
     this.panel = new ScrollPanel(this);
 
     onLayout(this, (view) => this.build(view));

@@ -28,7 +28,7 @@ Source: https://redditgameswithahook.devpost.com/
 - Publish or upload the final app version.
 - Create the public play/demo post in `r/TaaraNight`.
 - Open the public post in Reddit and solve one puzzle end to end.
-- Confirm Results, Comment/Copy share, My Sky, audio/read-aloud, and narration all work in the Reddit webview.
+- Confirm Results, Comment/Copy share, My Sky, and ambient audio all work in the Reddit webview.
 - Upload `submission/taaranight-demo.mp4` to Devpost if Devpost asks for a video.
 - Paste `submission/devpost-submission.md` into Devpost.
 - Add the app listing link: `https://developers.reddit.com/apps/taara-connect`.

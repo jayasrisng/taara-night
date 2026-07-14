@@ -20,10 +20,9 @@ import { getConstellationById } from '../../shared/constellationLoader';
 import {
   SKY_BOUNDS,
   SKY_FIGURES,
-  fieldStars,
   nearestStar,
+  projectSkyNear,
   yForDec,
-  type FieldStar,
   type MapPoint,
   type SkyFigure,
 } from '../../shared/skyMap';
@@ -38,11 +37,12 @@ import { prefs } from '../ui/prefs';
 import { StoryCard } from '../ui/StoryCard';
 import { color, control, font, hairline, ink, space, typeScale } from '../ui/theme';
 import { TEX } from '../ui/textures';
+import {
+  CONSTELLATION_ATLAS,
+  constellationArtFrame,
+  fitConstellationArt,
+} from '../ui/constellationArt';
 import type { ResultsData } from './Results';
-
-/** Grains of dust across the dome. Enough to feel deep, few enough to stay quiet. */
-const FIELD_COUNT = 260;
-const FIELD_SEED = 9;
 
 /** Parallels drawn faintly for orientation, plus the rim of the dome itself. */
 const RINGS = [60, 30, 0];
@@ -83,6 +83,8 @@ export type MySkyData = {
 /** A constellation's glow sprites, kept so a pan only moves them. */
 interface FigureView {
   figure: SkyFigure;
+  /** A quiet atlas figure, visible only after this constellation is gathered. */
+  art: GameObjects.Image;
   glows: GameObjects.Image[];
   label: GameObjects.Text | null;
   /** Per-star designations, built only when the setting asks for them. */
@@ -97,20 +99,19 @@ export class MySky extends Scene {
 
   private layer!: GameObjects.Container;
   private ringGfx!: GameObjects.Graphics;
-  private dustGfx!: GameObjects.Graphics;
   private threadGfx!: GameObjects.Graphics;
+  private labelLeaderGfx!: GameObjects.Graphics;
+  private artLayer!: GameObjects.Container;
   /** Glow sprites live under the star cores, so a core is never washed out by its own halo. */
   private glowLayer!: GameObjects.Container;
   private starGfx!: GameObjects.Graphics;
 
-  private dust: FieldStar[] = [];
   private views: FigureView[] = [];
 
   /** Constellation id → the night it was revealed. Empty until the server answers. */
   private gathered = new Map<string, number>();
   private answered = false;
   private reachable = true;
-
   // The dome’s transform: `zoom` pixels per map unit, `centre` at mid-screen.
   private zoom = 1;
   private fitZoom = 1;
@@ -170,16 +171,29 @@ export class MySky extends Scene {
   }
 
   create(): void {
-    this.sky = new NightSky(this, this.params.tonight?.night ?? 1);
-    this.dust = fieldStars(FIELD_COUNT, FIELD_SEED);
+    // This scene already draws the real catalogue. Decorative stars would look
+    // like extra puzzle nodes and make the chart impossible to read.
+    this.sky = new NightSky(this, this.params.tonight?.night ?? 1, {
+      stars: false,
+      shootingStars: false,
+      moon: { nx: 0.88, ny: 0.24, scale: 0.62, alpha: 0.56 },
+    });
 
     this.ringGfx = this.add.graphics();
-    this.dustGfx = this.add.graphics();
     this.threadGfx = this.add.graphics();
+    this.labelLeaderGfx = this.add.graphics();
+    this.artLayer = this.add.container(0, 0);
     this.glowLayer = this.add.container(0, 0);
     this.starGfx = this.add.graphics();
     this.layer = this.add
-      .container(0, 0, [this.ringGfx, this.dustGfx, this.threadGfx, this.glowLayer, this.starGfx])
+      .container(0, 0, [
+        this.ringGfx,
+        this.artLayer,
+        this.threadGfx,
+        this.glowLayer,
+        this.starGfx,
+        this.labelLeaderGfx,
+      ])
       .setDepth(1);
 
     this.buildFigures();
@@ -276,6 +290,7 @@ export class MySky extends Scene {
    */
   private buildFigures(): void {
     for (const view of this.views) {
+      view.art.destroy();
       view.glows.forEach((glow) => glow.destroy());
       view.label?.destroy();
       view.starLabels.forEach((label) => label.destroy());
@@ -285,15 +300,27 @@ export class MySky extends Scene {
     for (const figure of SKY_FIGURES) {
       if (!this.isLit(figure)) continue;
 
-      const glows = figure.points.map(() =>
-        this.add.image(0, 0, TEX.starSoft).setScale(texScale(0.22)).setTint(color.starCore).setAlpha(0.75)
+      const art = this.add
+        .image(0, 0, CONSTELLATION_ATLAS, figure.id)
+        .setBlendMode(Phaser.BlendModes.SCREEN)
+        .setTint(0xabc9e8)
+        .setAlpha(this.isTonight(figure) ? 0.62 : this.isLit(figure) ? 0.46 : 0.36);
+      this.artLayer.add(art);
+
+      const starPalette = [0xffffff, 0xd9e9ff, 0xffedcb, 0xc7dcff];
+      const glows = figure.points.map((_, index) =>
+        this.add
+          .image(0, 0, TEX.starSoft)
+          .setScale(texScale(0.24 + ((index * 37 + figure.id.length * 11) % 7) * 0.018))
+          .setTint(starPalette[(index + figure.id.length) % starPalette.length]!)
+          .setAlpha(0.9)
       );
 
       const label = crispText(this, 0, 0, figure.name, {
         fontFamily: font.serif,
         fontSize: `${typeScale.caption}px`,
         color: ink.accent,
-      }).setOrigin(0.5, 0);
+      }).setOrigin(0.5);
       label.setAlpha(0.85);
 
       // The stars of a gathered sky may carry their own names — a quiet
@@ -313,7 +340,7 @@ export class MySky extends Scene {
       this.glowLayer.add(glows);
       this.layer.add(label);
       starLabels.forEach((starLabel) => this.layer.add(starLabel));
-      this.views.push({ figure, glows, label, starLabels });
+      this.views.push({ figure, art, glows, label, starLabels });
     }
   }
 
@@ -370,10 +397,40 @@ export class MySky extends Scene {
 
   private redraw(): void {
     this.drawRings();
-    this.drawDust();
+    this.drawArt();
     this.drawThreads();
     this.drawStars();
     this.drawLabels();
+  }
+
+  /** Unlocked myths turn the mathematically real chart into a living atlas. */
+  private drawArt(): void {
+    const zoomRatio = this.zoom / this.fitZoom;
+    // A whole-sky chart needs linework, not 88 overlapping paintings. The myth
+    // illustration fades in once its individual figure has enough room.
+    const artDetail = clamp(0, (zoomRatio - 1.12) / 0.88, 1);
+
+    for (const view of this.views) {
+      const centre = this.toScreen(view.figure.centre);
+      const visible = this.onScreen(centre);
+      const frame = constellationArtFrame(view.figure.id, 'atlas');
+      const targets = frame?.anchors.map((anchor) => this.toScreen(projectSkyNear(anchor, view.figure.centre.x))) ?? [];
+      const transform = frame ? fitConstellationArt(frame, targets) : null;
+      view.art.setVisible(visible && artDetail > 0.01);
+      if (transform) {
+        view.art
+          .setPosition(transform.x, transform.y)
+          .setRotation(transform.rotation)
+          .setScale(transform.scaleX, transform.scaleY);
+      }
+      view.art.setAlpha(artDetail * (
+        this.isTonight(view.figure)
+          ? 0.5 + 0.13 * this.pulse
+          : this.isLit(view.figure)
+            ? 0.46
+            : 0.36
+      ));
+    }
   }
 
   /**
@@ -394,19 +451,16 @@ export class MySky extends Scene {
     line(0, 0.7);
   }
 
-  private drawDust(): void {
-    this.dustGfx.clear();
-    for (const grain of this.dust) {
-      const point = this.toScreen(grain);
-      if (!this.onScreen(point)) continue;
-      this.dustGfx.fillStyle(color.dust, 0.18 + grain.magnitude * 0.42);
-      this.dustGfx.fillCircle(point.x, point.y, 0.7 + grain.magnitude * 1.3);
-    }
-  }
-
   /** Only gathered constellations have threads. A sleeping shape is the spoiler. */
   private drawThreads(): void {
     this.threadGfx.clear();
+
+    // At atlas scale, use cartographic hairlines. Detail and glow return only
+    // as the player leans into a constellation.
+    const zoomRatio = this.zoom / this.fitZoom;
+    const detail = clamp(0, (zoomRatio - 1) / 1.8, 1);
+    const glowDetail = clamp(0, (zoomRatio - 1.35) / 1.4, 1);
+    const coreWidth = 0.7 + 1.2 * detail;
 
     for (const { figure } of this.views) {
       const breath = this.isTonight(figure) ? 0.55 + 0.45 * this.pulse : 0.7;
@@ -416,9 +470,11 @@ export class MySky extends Scene {
         const b = this.toScreen(figure.points[edge.to]!);
         if (!this.onScreen(a) && !this.onScreen(b)) continue;
 
-        this.threadGfx.lineStyle(7, color.accentGlow, 0.12 * breath);
-        this.threadGfx.lineBetween(a.x, a.y, b.x, b.y);
-        this.threadGfx.lineStyle(1.6, color.accentBright, 0.9 * breath);
+        if (glowDetail > 0) {
+          this.threadGfx.lineStyle(2 + 6 * glowDetail, color.accentGlow, 0.12 * glowDetail * breath);
+          this.threadGfx.lineBetween(a.x, a.y, b.x, b.y);
+        }
+        this.threadGfx.lineStyle(coreWidth, color.accentBright, (0.66 + 0.32 * detail) * breath);
         this.threadGfx.lineBetween(a.x, a.y, b.x, b.y);
       }
     }
@@ -431,13 +487,17 @@ export class MySky extends Scene {
   private drawStars(): void {
     this.starGfx.clear();
 
+    const zoomRatio = this.zoom / this.fitZoom;
+    const detail = clamp(0, (zoomRatio - 1) / 1.8, 1);
+    const showGlows = zoomRatio >= 1.65;
+
     for (const figure of SKY_FIGURES) {
       if (this.isLit(figure)) continue;
       for (const star of figure.points) {
         const point = this.toScreen(star);
         if (!this.onScreen(point)) continue;
-        this.starGfx.fillStyle(color.sleeping, 0.5);
-        this.starGfx.fillCircle(point.x, point.y, 1.6);
+        this.starGfx.fillStyle(color.sleeping, 0.68);
+        this.starGfx.fillCircle(point.x, point.y, 0.65 + 0.75 * detail);
       }
     }
 
@@ -445,10 +505,19 @@ export class MySky extends Scene {
       view.figure.points.forEach((star, index) => {
         const point = this.toScreen(star);
         const visible = this.onScreen(point);
-        view.glows[index]!.setVisible(visible).setPosition(point.x, point.y);
+        const glow = view.glows[index]!;
+        const baseGlow = 0.24 + ((index * 37 + view.figure.id.length * 11) % 7) * 0.018;
+        glow
+          .setVisible(visible && showGlows)
+          .setPosition(point.x, point.y)
+          .setScale(texScale(baseGlow * (0.45 + 0.55 * detail)));
         if (!visible) return;
-        this.starGfx.fillStyle(color.starCore, 1);
-        this.starGfx.fillCircle(point.x, point.y, 2.1);
+        const palette = [0xffffff, 0xd9e9ff, 0xffedcb, 0xc7dcff];
+        const tint = palette[(index + view.figure.id.length) % palette.length]!;
+        const variation = ((index * 17 + view.figure.id.length) % 5) / 4;
+        const radius = 0.62 + variation * 0.32 + detail * (1.55 + variation * 0.6);
+        this.starGfx.fillStyle(tint, 0.82 + 0.18 * detail);
+        this.starGfx.fillCircle(point.x, point.y, radius);
       });
     }
   }
@@ -462,17 +531,61 @@ export class MySky extends Scene {
    */
   private drawLabels(): void {
     const showing = this.zoom >= this.fitZoom * LABEL_ZOOM;
+    const placedLabels: { x1: number; y1: number; x2: number; y2: number }[] = [];
+    this.labelLeaderGfx.clear();
 
     for (const view of this.views) {
       const label = view.label;
       if (!label) continue;
 
-      const centre = this.toScreen(view.figure.centre);
-      const y = centre.y + view.figure.radius * this.zoom + space.md;
-      label.setPosition(centre.x, y);
+      const points = view.figure.points.map((point) => this.toScreen(point));
+      const top = points.reduce((best, point) => (point.y < best.y ? point : best));
+      const bottom = points.reduce((best, point) => (point.y > best.y ? point : best));
+      const left = points.reduce((best, point) => (point.x < best.x ? point : best));
+      const right = points.reduce((best, point) => (point.x > best.x ? point : best));
+      const gap = 7;
+      const candidates = [
+        { anchor: bottom, x: bottom.x, y: bottom.y + gap + label.height / 2, side: 'bottom' },
+        { anchor: top, x: top.x, y: top.y - gap - label.height / 2, side: 'top' },
+        { anchor: right, x: right.x + gap + label.width / 2, y: right.y, side: 'right' },
+        { anchor: left, x: left.x - gap - label.width / 2, y: left.y, side: 'left' },
+      ] as const;
 
-      const clear = y > this.hudTop && y + label.height < this.hudBottom;
-      label.setVisible(showing && clear && this.onScreen({ x: centre.x, y }));
+      const placement = showing
+        ? candidates.find((candidate) => {
+            const rect = {
+              x1: candidate.x - label.width / 2 - 3,
+              y1: candidate.y - label.height / 2 - 2,
+              x2: candidate.x + label.width / 2 + 3,
+              y2: candidate.y + label.height / 2 + 2,
+            };
+            const inFrame =
+              rect.x1 >= 0 &&
+              rect.x2 <= this.view.w &&
+              rect.y1 > this.hudTop &&
+              rect.y2 < this.hudBottom;
+            const open = !placedLabels.some(
+              (other) => rect.x1 < other.x2 && rect.x2 > other.x1 && rect.y1 < other.y2 && rect.y2 > other.y1
+            );
+            if (inFrame && open) {
+              placedLabels.push(rect);
+              return true;
+            }
+            return false;
+          })
+        : undefined;
+
+      label.setVisible(placement !== undefined);
+      if (placement) {
+        label.setPosition(placement.x, placement.y);
+        const end = { x: placement.x, y: placement.y };
+        if (placement.side === 'bottom') end.y -= label.height / 2;
+        if (placement.side === 'top') end.y += label.height / 2;
+        if (placement.side === 'right') end.x -= label.width / 2;
+        if (placement.side === 'left') end.x += label.width / 2;
+        this.labelLeaderGfx.lineStyle(hairline, color.accentBright, 0.46);
+        this.labelLeaderGfx.lineBetween(placement.anchor.x, placement.anchor.y, end.x, end.y);
+      }
 
       const naming = this.zoom >= this.fitZoom * STAR_LABEL_ZOOM;
       const fc = this.toScreen(view.figure.centre);
@@ -853,7 +966,7 @@ export class MySky extends Scene {
     this.card = new StoryCard(this, {
       name: constellation.name,
       story: constellation.story,
-      narrationId: constellation.id,
+      telugu: constellation.localized.te,
       buttonLabel: 'Close',
       onButton: () => this.closeStory(),
       ...(night ? { note: `Revealed on night #${night}` } : {}),

@@ -82,6 +82,16 @@ describe('Constellation Loader', () => {
       });
     });
 
+    it('should have complete Telugu copy for all 88 constellations', () => {
+      const dataset = loadConstellations();
+      expect(dataset.constellations).toHaveLength(88);
+      dataset.constellations.forEach((constellation) => {
+        expect(constellation.localized.te.title.trim()).not.toBe('');
+        expect(constellation.localized.te.story.trim()).not.toBe('');
+        expect(constellation.localized.te.fact.trim()).not.toBe('');
+      });
+    });
+
     it('should have at least one star for each constellation', () => {
       const dataset = loadConstellations();
       dataset.constellations.forEach((constellation) => {

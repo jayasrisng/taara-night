@@ -64,6 +64,17 @@ export function projectSky({ ra, dec }: SkyCoord): MapPoint {
   return { x: round4(xForRa(ra)), y: round4(yForDec(dec)) };
 }
 
+/**
+ * Project beside a particular figure rather than blindly onto the 0h seam.
+ * Pisces and other seam-crossing constellations unwrap their playable stars;
+ * their illustration anchors must make the identical wrap or the art tears
+ * four whole map units away from its stars.
+ */
+export function projectSkyNear(coord: SkyCoord, nearX: number): MapPoint {
+  const point = projectSky(coord);
+  return { ...point, x: round4(point.x + Math.round((nearX - point.x) / 4) * 4) };
+}
+
 /** One constellation, laid down on the dome among all the others. */
 export interface SkyFigure {
   id: string;

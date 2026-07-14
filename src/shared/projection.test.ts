@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_PADDING, projectToBox, skyCentroid, type SkyCoord } from './projection';
+import { DEFAULT_PADDING, projectIntoBox, projectToBox, skyCentroid, type SkyCoord } from './projection';
 
 const BETELGEUSE: SkyCoord = { ra: 5.9195, dec: 7.4071 };
 const RIGEL: SkyCoord = { ra: 5.2423, dec: -8.2016 };
@@ -109,6 +109,16 @@ describe('projectToBox: fit', () => {
 
   it('returns nothing for no stars', () => {
     expect(projectToBox([])).toEqual([]);
+  });
+});
+
+describe('projectIntoBox', () => {
+  it('uses the playable stars as its frame when projecting artwork anchors', () => {
+    const stars = [BETELGEUSE, RIGEL, { ra: 5.6, dec: -1.2 }];
+    expect(projectIntoBox(stars, stars)).toEqual(projectToBox(stars));
+    const [anchor] = projectIntoBox(stars, [{ ra: 5.5, dec: 0 }]);
+    expect(anchor!.x).toBeGreaterThan(0);
+    expect(anchor!.x).toBeLessThan(1);
   });
 });
 

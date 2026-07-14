@@ -17,6 +17,7 @@ import { fetchInit } from '../api';
 import { crispText } from '../ui/display';
 import { onLayout } from '../ui/layout';
 import { font, ink, typeScale } from '../ui/theme';
+import { preloadConstellationAtlas } from '../ui/constellationArt';
 import { resultsDataFromInit } from './Results';
 
 export class Boot extends Scene {
@@ -24,6 +25,12 @@ export class Boot extends Scene {
 
   constructor() {
     super('Boot');
+  }
+
+  preload(): void {
+    // One compact atlas powers all 88 figures in My Sky. The full-resolution
+    // artwork for tonight is loaded separately by Play.
+    preloadConstellationAtlas(this);
   }
 
   create(): void {

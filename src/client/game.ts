@@ -48,10 +48,6 @@ const StartGame = (parentId: string): Game => {
     scene: [Boot, Play, Results, MySky, ConstellationDebug],
   });
 
-  if (new URLSearchParams(window.location.search).get('capture') === '1') {
-    (window as Window & { __TAARA_GAME__?: Game }).__TAARA_GAME__ = game;
-  }
-
   // `NONE` never tracks the parent on its own, so we drive it. This also covers
   // the mobile address-bar collapse and the desktop/mobile playtest toggle,
   // which resize the container without firing a window `resize`.

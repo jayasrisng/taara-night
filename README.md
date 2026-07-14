@@ -19,7 +19,7 @@ Every night at dusk (6 PM Pacific), a new sky opens on the subreddit. Everyone g
 
 Then you go to sleep. Tomorrow there's a new sky.
 
-It's a bedtime ritual, not a grind: the ambience is wind and crickets synthesized in your browser, the stories can be read aloud to you, and the whole community plays one shared board. The calendar sets the texture of the night: Monday is gentle, Sunday is dense, and every run has a soft timer.
+It's a bedtime ritual, not a grind: the ambience is wind and crickets synthesized in your browser, the stories are short enough for young readers, and the whole community plays one shared board. The calendar sets the texture of the night: Monday is gentle, Sunday is dense, and every run has a soft timer.
 
 ## How to play
 
@@ -42,7 +42,7 @@ There's one leaderboard per night: fastest time first, with quiet honesty tags f
 - **Reddit Devvit** web app, **Phaser 4**, TypeScript, Hono routes, Devvit Redis. No external backend.
 - Every star is a real star: J2000 positions and IAU-approved names, projected so each figure looks exactly the way it does overhead.
 - The nightly puzzle is fully deterministic from the night number — everyone on Earth sees the same sky, and archive posts keep theirs forever.
-- All art is procedural or my own, all 88 bedtime stories are original writing, and all audio is synthesized at runtime — nothing sampled, nothing scraped.
+- All 88 bedtime stories are original writing, and all audio is synthesized at runtime. Constellation illustrations are original/generated work or credited, license-compatible Stellarium atlas art.
 
 ## Local development
 
@@ -60,6 +60,6 @@ The public community is [r/TaaraNight](https://www.reddit.com/r/TaaraNight).
 ## Data & attribution
 
 - Star positions/designations: [IAU Catalog of Star Names](https://www.iau.org/public/themes/naming_stars/) and the [HYG Database v4.1](https://github.com/astronexus/HYG-Database) (CC-BY-SA).
-- Story narration voice: [Piper TTS](https://github.com/rhasspy/piper), `en_US-lessac-medium` (MIT).
+- Constellation illustrations: Johan Meuris' Stellarium Modern sky culture (Free Art License 1.3), plus original generated Serpens and Taurus assets. Full modification and source details are in [`public/constellation-art/CREDITS.md`](public/constellation-art/CREDITS.md).
 - Logo photograph: my own, Dover, Arkansas.
 - Constellation stories, UI, icons, sounds, and effects: original work for this project.

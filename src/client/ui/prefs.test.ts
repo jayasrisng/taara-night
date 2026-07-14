@@ -15,7 +15,13 @@ function hostileStorage(): PrefStorage {
 
 describe('defaultPrefs', () => {
   it('starts with sound on and the hints unseen', () => {
-    expect(defaultPrefs(false)).toEqual({ sound: true, reducedMotion: false, onboarded: false, starNames: false });
+    expect(defaultPrefs(false)).toEqual({
+      sound: true,
+      reducedMotion: false,
+      onboarded: false,
+      starNames: false,
+      storyLanguage: 'en',
+    });
   });
 
   it('takes stillness from the operating system', () => {
@@ -26,12 +32,13 @@ describe('defaultPrefs', () => {
 describe('Prefs', () => {
   it('remembers what it was told', () => {
     const storage = memoryStorage();
-    new Prefs(storage, false).set({ sound: false, onboarded: true });
+    new Prefs(storage, false).set({ sound: false, onboarded: true, storyLanguage: 'te' });
 
     const next = new Prefs(storage, false);
     expect(next.sound).toBe(false);
     expect(next.onboarded).toBe(true);
     expect(next.reducedMotion).toBe(false);
+    expect(next.storyLanguage).toBe('te');
   });
 
   it('lets a stored choice override the system preference', () => {

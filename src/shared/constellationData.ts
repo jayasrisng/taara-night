@@ -34,6 +34,17 @@ import type {
   Difficulty,
 } from './constellations';
 import { projectToBox } from './projection';
+import TELUGU_STORIES from './teluguStories.json';
+
+type TeluguSource = {
+  number: number;
+  iauName: string;
+  title: string;
+  story: string;
+  fact: string;
+};
+
+const TELUGU_BY_ID = TELUGU_STORIES as Record<string, TeluguSource>;
 
 /** A constellation as authored: real stars, real coordinates. */
 interface SkyConstellation {
@@ -47,16 +58,63 @@ interface SkyConstellation {
   story: string;
 }
 
+const STORY_GOODNIGHT =
+  'You did a wonderful job finding these stars tonight. Now close your eyes, sleep well, and come back tomorrow for a new constellation story.';
+
+/**
+ * Keep the special myth in every entry, but tell it in a short, predictable
+ * shape a ten-year-old can read without help. The older source stories remain
+ * beside their star data for editors; players get the first two story beats,
+ * gentler vocabulary, and the same clear goodnight invitation every night.
+ */
+function storyForYoungReaders(sky: SkyConstellation): string {
+  const simpler = sky.story
+    .replaceAll('heavens', 'sky')
+    .replaceAll('mortal', 'person')
+    .replaceAll('cosmic ocean', 'ocean of stars')
+    .replaceAll('cosmos', 'stars')
+    .replaceAll('eternal', 'endless')
+    .replaceAll('humility', 'not to brag')
+    .replaceAll('gratitude', 'thanks')
+    .replaceAll('beyond measure', 'more than words can say')
+    .replaceAll('Legends say', 'Old stories say')
+    .replaceAll('constancy', 'steady light')
+    .replaceAll('steadfast', 'brave and steady')
+    .replaceAll('celestial', 'starry')
+    .replaceAll('ancient', 'very old')
+    .replaceAll('ages ago', 'long ago')
+    .replaceAll('granary', 'grain store')
+    .replaceAll('sowing', 'planting')
+    .replaceAll('moored', 'resting')
+    .replaceAll('embers', 'little lights')
+    .replaceAll('ember', 'little light')
+    .replaceAll(' — ', '. ');
+  const beats = simpler.match(/[^.!?]+[.!?]+/g)?.slice(0, 2).map((sentence) => sentence.trim()) ?? [simpler];
+  const meaning = sky.meaning.charAt(0).toLowerCase() + sky.meaning.slice(1);
+  return `Tonight you found ${sky.name}, ${meaning}. ${beats.join(' ')} ${STORY_GOODNIGHT}`;
+}
+
 /** Project the catalogue coordinates into the 0–1 box the puzzle plays in. */
 function build(sky: SkyConstellation): Constellation {
   const points = projectToBox(sky.stars);
+  const telugu = TELUGU_BY_ID[sky.id];
+  if (!telugu || telugu.iauName !== sky.name) {
+    throw new Error(`Missing or mismatched Telugu story for ${sky.id} (${sky.name})`);
+  }
   return {
     id: sky.id,
     name: sky.name,
     meaning: sky.meaning,
     difficulty: sky.difficulty,
     connections: sky.connections,
-    story: sky.story,
+    story: storyForYoungReaders(sky),
+    localized: {
+      te: {
+        title: telugu.title,
+        story: telugu.story,
+        fact: telugu.fact,
+      },
+    },
     stars: sky.stars.map((s, i) => ({
       x: points[i]!.x,
       y: points[i]!.y,

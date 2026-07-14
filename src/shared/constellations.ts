@@ -24,6 +24,15 @@ export interface Connection {
   to: number;
 }
 
+export interface LocalizedStory {
+  /** Translated display title from the approved manuscript. */
+  title: string;
+  /** Approved translated bedtime story. */
+  story: string;
+  /** Approved translated astronomy fact. */
+  fact: string;
+}
+
 export interface Constellation {
   /** Unique identifier */
   id: string;
@@ -39,6 +48,10 @@ export interface Constellation {
   difficulty: Difficulty;
   /** Bedtime story/myth (3-5 sentences, calming tone) */
   story: string;
+  /** Additive translations; the existing English fields above remain canonical and unchanged. */
+  localized: {
+    te: LocalizedStory;
+  };
 }
 
 export interface ConstellationDataset {

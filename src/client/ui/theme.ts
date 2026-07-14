@@ -5,8 +5,8 @@
  * that reaches for a hex literal or a stray `13px` is a scene that will drift
  * away from the rest of the game the next time someone edits it.
  *
- * **One hue for the night.** The whole dark palette sits at ~233° — the same
- * indigo, lightened step by step. Surfaces that touch each other therefore never
+ * **One family for the night.** The whole dark palette moves from blue-black to
+ * clear midnight blue. Surfaces that touch each other therefore never
  * disagree about what colour "dark blue" is, and the sky can carry a card
  * without either looking pasted on.
  *
@@ -45,26 +45,26 @@ export function mixColor(from: number, to: number, t: number): number {
 }
 
 export const color = {
-  /* ---- the night, dark to light (hue ≈ 233°) ---- */
+  /* ---- the night, dark to light (blue-black) ---- */
 
   /** Vignettes, scrims, the dimming behind a reveal. Almost black. */
-  void: 0x03040c,
+  void: 0x01050c,
   /** The top of the sky gradient. */
-  skyTop: 0x05060f,
+  skyTop: 0x020a17,
   /** Behind the canvas itself, on the rare frame the sky has not painted yet. */
-  canvas: 0x070b1f,
+  canvas: 0x041326,
   /** A modal card — the story, the tutorial. */
-  card: 0x0e1430,
+  card: 0x071a30,
   /** The bottom of the sky gradient. */
-  skyBottom: 0x161a3e,
+  skyBottom: 0x0a2945,
   /** Any resting surface over the sky: pills, difficulty cards. */
-  surface: 0x1a2048,
-  surfaceHover: 0x232a58,
-  surfacePress: 0x272e60,
+  surface: 0x0d2b49,
+  surfaceHover: 0x123957,
+  surfacePress: 0x174462,
   /** A tab that is showing, a toggle that is on. */
-  surfaceActive: 0x2d3570,
+  surfaceActive: 0x1a5072,
   /** Hairlines: dividers, the dome's parallels. */
-  line: 0x2b3268,
+  line: 0x245474,
 
   /* ---- the one warm accent, bright to deep (hue 42°) ---- */
 
@@ -82,17 +82,17 @@ export const color = {
   /** The body of a star. Warm white, so it is never mistaken for a UI surface. */
   starCore: 0xfff6e0,
   /** The halo around one. */
-  starGlow: 0xc2c9ff,
+  starGlow: 0xb8dcff,
   /** The glow under cool type, and the moon's own corona. */
-  starlight: 0x8a97ff,
+  starlight: 0x79bcea,
   /** The moon. */
-  moon: 0xf4f1ff,
+  moon: 0xeaf6ff,
   /** Dust across the dome — the stars that belong to no constellation. */
-  dust: 0xccd1ff,
+  dust: 0xc5def2,
   /** A star in a constellation not yet revealed. Present, anonymous. */
-  sleeping: 0x949bd1,
+  sleeping: 0x7fa3c0,
   /** Easy's guide line. */
-  outline: 0x727ab6,
+  outline: 0x5685a9,
 
   /* ---- the two colours that mean something ---- */
 
@@ -103,10 +103,10 @@ export const color = {
 
   /* ---- type ---- */
 
-  textBright: 0xf5f3ff,
-  textBody: 0xe2e6ff,
-  textMuted: 0xa7b0da,
-  textFaint: 0x7883b0,
+  textBright: 0xf7fbff,
+  textBody: 0xe4f0fa,
+  textMuted: 0xaec5d8,
+  textFaint: 0x829eb7,
 } as const;
 
 /** The same colours, pre-stringified for `Text` styles. */
@@ -124,6 +124,8 @@ export const font = {
   serif: 'Fraunces, Georgia, "Times New Roman", serif',
   /** Labels, numbers, anything the player is meant to read at a glance. */
   sans: 'Inter, Arial, Helvetica, sans-serif',
+  /** A warm, bookish Telugu face for the bedtime-story reward. */
+  telugu: '"Noto Serif Telugu", "Noto Serif", Georgia, serif',
 } as const;
 
 /**

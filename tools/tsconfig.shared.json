@@ -9,6 +9,6 @@
 
     "rootDir": "../src/shared"
   },
-  "include": ["../src/shared/**/*"],
+  "include": ["../src/shared/**/*", "../src/shared/**/*.json"],
   "exclude": []
 }

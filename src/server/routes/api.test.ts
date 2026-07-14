@@ -7,7 +7,7 @@
  * status codes, the JSON shapes the client depends on, the spoiler rule, and
  * the dev-only gate on the night override.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CONSTELLATION_DATA } from '../../shared/constellationData';
 import { createFakeRedis } from '../core/fakeRedis';
 import { keys } from '../core/keys';
@@ -68,6 +68,19 @@ const post = (body: unknown) =>
 const share = () => api.request('/share', { method: 'POST' });
 
 const solve = { timeMs: 42_000, whispers: 1, glitches: 2 };
+
+// Keep route tests after the public launch epoch. Tests that rely on "yesterday"
+// or an archive being older than tonight should not depend on the wall clock of
+// the machine running the release suite.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-07-22T12:00:00Z'));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 describe('routes', () => {
   beforeEach(() => {

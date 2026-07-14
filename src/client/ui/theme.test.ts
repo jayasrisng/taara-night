@@ -3,7 +3,7 @@ import { color, hex, mixColor } from './theme';
 
 describe('hex', () => {
   it('pads a dark token to six digits', () => {
-    expect(hex(color.skyTop)).toBe('#05060f');
+    expect(hex(color.skyTop)).toBe('#020a17');
     expect(hex(0x000000)).toBe('#000000');
   });
 });

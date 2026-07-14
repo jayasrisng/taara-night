@@ -10,7 +10,7 @@ The TaaraNight logo is a photograph I took of the night sky in Dover, Arkansas, 
 
 ## What it does
 
-Every night at dusk, one shared puzzle opens on the subreddit. Everyone gets the same sky. You connect real stars, using actual catalog positions and IAU-verified names, to reveal one of the 88 constellations. Finish the figure and it breathes: its name arrives, and an original bedtime story wakes, with recorded narration you can listen to as you fall asleep.
+Every night at dusk, one shared puzzle opens on the subreddit. Everyone gets the same sky. You connect real stars, using actual catalog positions and IAU-verified names, to reveal one of the 88 constellations. Finish the figure and it breathes: its name arrives, and a short original bedtime story wakes for you to read.
 
 Difficulty follows the calendar: Monday is gentle, Sunday is a monster. There is one leaderboard per night, fastest solve first, with quiet honesty marks showing who used Whispers or touched Glitches. A clean run shows only the time.
 
@@ -20,7 +20,7 @@ Every constellation you solve takes its true celestial position in My Sky, a pan
 
 TaaraNight is a Reddit Devvit web app built with Phaser 4, TypeScript, Hono routes, and Devvit Redis, with no external backend. Every star is data-real: positions come from the HYG database, names are validated against the official IAU Catalog of Star Names, and figures are projected gnomonically so each shape matches the real sky.
 
-The nightly puzzle is deterministic from the night number, so everyone shares the same sky and archive posts keep their original puzzle forever. Art is procedural or my own photography, all 88 stories are original writing, ambience is synthesized in the browser with Web Audio, and narrations are generated with the MIT-licensed Piper TTS.
+The nightly puzzle is deterministic from the night number, so everyone shares the same sky and archive posts keep their original puzzle forever. Art comes from credited sky-atlas sources or original work, all 88 stories are original writing, and ambience is synthesized in the browser with Web Audio.
 
 ## Challenges
 
@@ -28,7 +28,7 @@ Getting 88 constellations right was the hardest part: full-fidelity reference fi
 
 ## Accomplishments
 
-TaaraNight became a daily ritual that teaches real astronomy without feeling like homework: a complete original dataset of 88 figures, 88 stories, and 88 narrations, wrapped in a quiet bedtime UI built for Reddit.
+TaaraNight became a daily ritual that teaches real astronomy without feeling like homework: a complete original dataset of 88 figures and 88 stories, wrapped in a quiet bedtime UI built for Reddit.
 
 ## What's next
 
@@ -36,11 +36,11 @@ Community milestones, streak flair, an AR companion that finds solved constellat
 
 ## Built with
 
-Devvit, Phaser 4, TypeScript, Hono, Redis, Web Audio, Piper TTS, HYG Database, IAU-CSN.
+Devvit, Phaser 4, TypeScript, Hono, Redis, Web Audio, HYG Database, IAU-CSN.
 
 ## Submission links to add
 
 - App listing: `https://developers.reddit.com/apps/taara-connect`
 - Public community: `https://www.reddit.com/r/TaaraNight/`
 - Demo/play post: add the final `r/TaaraNight` post URL after publishing
-- Source repository: add the GitHub repository URL after pushing
+- Source repository: `https://github.com/jayasrisng/taara-night`
