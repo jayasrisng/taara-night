@@ -7,7 +7,14 @@
 
 ---
 
-![TaaraNight demo](media/taaranight-demo.gif)
+<p align="center">
+  <a href="submission/taaranight-demo.mp4">
+    <img src="media/taaranight-demo.gif" alt="TaaraNight trailer — connect real stars, reveal Taurus, and read the story in English or Telugu" width="360" />
+  </a>
+</p>
+<p align="center">
+  <a href="submission/taaranight-demo.mp4"><strong>Watch the full 59-second TaaraNight trailer with sound</strong></a>
+</p>
 
 The logo above isn't stock art — it's a photograph I took of the night sky in Dover, Arkansas, one of the darkest corners of the state. Standing under that sky, I realized I could point at maybe two constellations with any confidence. Thousands of stars up there, and I knew almost none of their names.
 
