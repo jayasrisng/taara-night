@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@fontsource/fraunces": "^5.2.9",
+    "@fontsource/fraunces": "^5.3.0",
     "@fontsource/inter": "^5.2.8",
     "@types/node": "^22.19.19",
     "eslint": "10.6.0",
